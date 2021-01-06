@@ -1,3 +1,6 @@
+# Temporary files
+*.R~
+
 # History files
 .Rhistory
 .Rapp.history
