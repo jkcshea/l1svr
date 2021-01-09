@@ -78,7 +78,7 @@ svmRegress <- function(Y, X, epsilon, lambda) {
     ## Prepare solutions
     auxiliaryDual1 <- resultDual$x[1:nrow(X)] ## alpha minus
     auxiliaryDual2 <- resultDual$x[(nrow(X) + 1):(2 * nrow(X))] ## alpha plus
-    ## Return output -----------------------------------------------------------
+    ## Return output
     return(list(beta = beta,
                 auxiliaryPrimal1 = auxiliaryPrimal1,
                 auxiliaryPrimal2 = auxiliaryPrimal2,
