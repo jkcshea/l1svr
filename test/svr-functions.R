@@ -1,4 +1,5 @@
 l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
+                  confidence = FALSE,
                   heteroskedastic = FALSE,
                   h = NULL, kappa = NULL) {
     origCall <- match.call()
@@ -95,7 +96,7 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
                 }
             } else {
                 Xr <- matrix(X[, -i], ncol = ncol(X) - 1)
-                colnames(Xr) <- colnames(X)[-(i - 1)]
+                colnames(Xr) <- colnames(X)[-i]
                 tmpP <- svmInference(Xr = Xr, Zr = X[, i],
                                      Yr = concY[, i], Y = Y, U = U,
                                      epsilon = epsilon, lambda = lambda,
@@ -107,6 +108,68 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
         }
         names(pVec) <- origNames
         coefEstimates$pvalues <- pVec
+        ## ---------------------------------------
+        ## TESTING
+        ## confidence <- TRUE
+        alpha <- 0.05
+        if (confidence) {
+            confidenceMat <- NULL
+            for (i in 1:ncol(fullX)) {
+                args <- list(FUN = svmInference,
+                             init = coefEstimates$coef[i],
+                             target = alpha,
+                             tol = 5e-3,
+                             Y = Y, U = U,
+                             epsilon = epsilon, lambda = lambda,
+                             intercept = FALSE,
+                             heteroskedastic = heteroskedastic,
+                             hc = h, kappa = kappa)
+                if (tmpInt) {
+                    if (i == 1) {
+                        args$intercept <- FALSE
+                        args$Xr <- X
+                        args$Zr <- rep(1, n)
+                        args$Yr <- concY[, 1]
+                    } else {
+                        Xr <- matrix(X[, -(i - 1)], ncol = ncol(X) - 1)
+                        colnames(Xr) <- colnames(X)[-(i - 1)]
+                        args$intercept <- TRUE
+                        args$Xr <- Xr
+                        args$Zr = X[, (i - 1)]
+                        args$Yr = concY[, i]
+                    }
+                } else {
+                    Xr <- matrix(X[, -i], ncol = ncol(X) - 1)
+                    colnames(Xr) <- colnames(X)[-i]
+                    args$intercept <- FALSE
+                    args$Xr <- Xr
+                    args$Zr <- X[, i]
+                    args$Yr <- concY[, i]
+                }
+                ## Find lower bound
+                print('coefEstimate$coef[i]')
+                print(coefEstimates$coef)
+                print(coefEstimates$coef[i])
+                args$left <- TRUE
+                args$increment <- -abs(coefEstimates$coef[i])
+                save(args, file = 'test-args.Rdata')
+                stop('end of test')
+                lb <- do.call(gridSearch, args)
+                print('found lb')
+                print(lb)
+                ## Find upper bound
+                args$left <- FALSE
+                args$increment <- abs(coefEstimates$coef[i])
+                ub <- do.call(gridSearch, args)
+                print('found ub')
+                print(ub)
+                ## Save results
+                confidenceMat <- rbind(confidenceMat, c(lb, ub))
+            }
+            print('this is the confidence mat')
+            print(confidenceMat)
+        }
+        ## ---------------------------------------
         return(coefEstimates)
     }
 }
@@ -176,8 +239,8 @@ svmRegress <- function(Y, X, epsilon, lambda, intercept = TRUE) {
     betaMinus  <- solutions[(1 + tmpShift):(ncol(X) + tmpShift)]
     betaPlus <- solutions[(1 + tmpShift + ncol(X)):(tmpShift + 2 * ncol(X))]
     auxiliaryPrimal <- solutions[(2 * ncol(X) + 1 + tmpShift):length(solutions)]
-    auxiliaryPrimal1 <- auxiliaryPrimal[1:nrow(X)] ## xi minus
-    auxiliaryPrimal2 <- auxiliaryPrimal[(nrow(X) + 1):length(auxiliaryPrimal)] ## xi plus
+    primalNegative <- auxiliaryPrimal[1:nrow(X)] ## xi minus
+    primalPositive <- auxiliaryPrimal[(nrow(X) + 1):length(auxiliaryPrimal)] ## xi plus
     if (intercept) {
         beta <- c(betaIntercept, betaPlus - betaMinus)
         names(beta) <- c('(Intercept)', colnames(X))
@@ -212,14 +275,14 @@ svmRegress <- function(Y, X, epsilon, lambda, intercept = TRUE) {
     modelDual$lb    <- lbDual
     resultDual <- gurobi::gurobi(modelDual, list(outputflag = 0))
     ## Prepare solutions
-    auxiliaryDual1 <- resultDual$x[1:nrow(X)] ## alpha minus
-    auxiliaryDual2 <- resultDual$x[(nrow(X) + 1):(2 * nrow(X))] ## alpha plus
+    dualNegative <- resultDual$x[1:nrow(X)] ## alpha minus
+    dualPositive <- resultDual$x[(nrow(X) + 1):(2 * nrow(X))] ## alpha plus
     ## Return output
     return(list(coefficients = beta,
-                auxiliaryPrimal1 = auxiliaryPrimal1,
-                auxiliaryPrimal2 = auxiliaryPrimal2,
-                auxiliaryDual1  = auxiliaryDual1,
-                auxiliaryDual2  = auxiliaryDual2))
+                primalNegative = primalNegative,
+                primalPositive = primalPositive,
+                dualNegative  = dualNegative,
+                dualPositive  = dualPositive))
 }
 
 #' Function to perform inference
@@ -258,7 +321,7 @@ svmInference <- function(Xr, Zr, Yr, Y, U, epsilon, lambda = 0,
                                              ## median regression
         concResults <- svmRegress(Y = Yr, X = Xr, epsilon = epsilon,
                                   lambda = lambda, intercept = intercept)
-        alphaPlus <- concResults$auxiliaryDual1 - concResults$auxiliaryDual2
+        alphaPlus <- concResults$dualNegative - concResults$dualPositive
     }
     if (epsilon != 0) {
         if (!heteroskedastic) {
@@ -389,4 +452,77 @@ summary.l1svr <- function(object, ...) {
         cat("Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n\n")
         ## cat('Obs: ', object$N, '\n')
     }
+}
+
+#' Function to solve equations via grid search
+#'
+#' This function solves an equation using a grid search.
+#'
+#' @param FUN A function with a scalar argument.
+#' @param init Scalar, the starting point for the grid search.
+#' @param target Scalar, the target value for the function.
+#' @param increment Scalar, starting increment for the grid
+#'     search. This increment is progessively halved.
+#' @param tol Scalar, tolerance to determine when the target value is
+#'     reached.
+#' @param left Boolean, indicate the direction of search. For example,
+#'     \code{x^2 = 4} has two solutions, one being \code{-2} and the
+#'     other being \code{2}. If \code{init = 0} and \code{left =
+#'     TRUE}, then this function would return \code{-2}. If instead
+#'     \code{left = FALSE}, then this function would return \code{2}.
+#' @return Scalar, the argument value for which \code{FUN} is equal to
+#'     \code{target}.
+#'
+gridSearch <- function(FUN, init = 0, target, increment = 2,
+                       tol = 5e-3, left = FALSE, iter.max = 10,
+                       ...) {
+    exponent <- 0
+    initVal <- FUN(init, ...)
+    diff <- target - initVal
+    if (left) diff <- -diff
+    if (diff > 0) {
+            tooSmall <- TRUE
+            direction <- 1
+    }
+    if (diff < 0) {
+            tooSmall <- FALSE
+            direction <- -1
+    }
+    iter.count <- 1
+    while (abs(diff) > tol & iter.count <= iter.max) {
+        print('ORIGINAL init')
+        print(init)
+        print('stuff added')
+        print(direction * sign(increment) * abs(increment) ^ exponent)
+        init <- init + direction * sign(increment) * abs(increment) ^ exponent
+        value <- FUN(init, ...)
+        diff <- target - value
+        if (left) diff <- -diff        
+        if (diff > 0) {
+            if (tooSmall == FALSE) {
+                direction <- direction * -1
+                exponent <- exponent - 1
+            }
+            tooSmall <- TRUE
+        }
+        if (diff < 0) {
+            if (tooSmall == TRUE) {
+                direction <- direction * -1
+                exponent <- exponent - 1
+            }
+            tooSmall <- FALSE
+        }
+        print('init value')
+        print(init)
+        print('pvalue')
+        print(value)
+        iter.count <- iter.count + 1
+    }
+    if (abs(diff) > tol) {
+        warning(gsub('\\s+', ' ',
+                     'Calculation of confidence intervals terminated,
+                      iteration maximum reached.'),
+                call. = FALSE)
+    }
+    return(init)
 }

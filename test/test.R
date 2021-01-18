@@ -54,3 +54,43 @@ res3 <- l1svr(formula = y ~ 1 +  x1 + x2, data = simdata,
               epsilon = tmpEpsilon, lambda = tmpLambda, inference = TRUE,
               heteroskedastic = TRUE, h = 2, kappa = 1.75)
 summary(res3)
+
+
+table(res3$dualPositive)
+table(res3$dualNegative)
+
+
+
+test <- function(x) {
+    x^2
+}
+
+
+gridSearch(test, init = 0, target = 4, increment = -1, left = TRUE)
+gridSearch(test, init = 0, target = 4, increment = -1, left = FALSE)
+
+
+## -----------------------------------------------------------------------------
+## Check confidence interval
+## -----------------------------------------------------------------------------
+
+source('svr-functions.R')
+## Homoskedastic inference
+res4 <- l1svr(formula = y ~ 0 +  x1 + x2, data = simdata,
+              epsilon = tmpEpsilon, lambda = tmpLambda,
+              inference = TRUE,
+              confidence = FALSE)
+l1svr(formula = y ~ 0 +  x1 + x2, data = simdata,
+              epsilon = tmpEpsilon, lambda = tmpLambda,
+              inference = TRUE,
+              confidence = TRUE)
+
+load('test-args.Rdata')
+args$init
+args$increment
+args$left
+
+source('svr-functions.R')
+summary(res4)
+do.call(gridSearch, args)
+

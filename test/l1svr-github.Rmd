@@ -1,0 +1,154 @@
+---
+title: "l1svr: An R Package for Support Vector Regression under l1 Regularization"
+author: "Yuehao Bai, Hung Ho, Guillaume Pouliot, and Joshua Shea"
+bibliography: l1svr.bib
+output:
+  github_document:
+    toc: true
+    keep_html: true
+  html_document:
+    toc: true
+    keep_md: true
+vignette: >
+  %\VignetteIndexEntry{ivmte}
+  %\VignetteEncoding{UTF-8}
+  %\VignetteEngine{knitr::rmarkdown}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  cache = TRUE
+)
+```
+
+## Introduction
+
+The **l1svr** package allows the user to estimate and perform statistical inference for support vector regressions under l1 regularization (l1-SVR).
+This vignette documents package installation and requirements, and demonstrates how the package may be used.
+We refer the reader to @bai2021inference for technical details on how the estimation and inference are carried out.
+
+## Installation and Requirements
+
+**l1svr** can be installed from CRAN via
+```{r eval = FALSE}
+install.packages("l1svr")
+```
+
+If you have the **devtools** package, you can install the latest version of the module directly from our GitHub repository via
+```{r eval = FALSE}
+devtools::install_github("jkcshea/l1svr")
+```
+
+A package for solving linear programs is required.
+Currently, the package only suports Gurobi.
+This requires a Gurobi software license, which Gurobi Optimization offers at no cost to academic researchers.
+Gurobi and its R package **gurobi** can be optained from [Gurobi Optimization](http://www.gurobi.com/index).
+A very clear installation guide for Gurobi can be found [here](https://cran.r-project.org/package=prioritizr/vignettes/gurobi_installation.html)
+
+<!--
+    i. The **lpSolveAPI** package, which is free and open-source, and available from CRAN.
+    Note that **lpSolveAPI** is a wrapper for [lp_solve](http://lpsolve.sourceforge.net/5.5/), which is no longer
+    actively developed.
+-->
+
+## Background
+
+SHOW THE LOSS FUNCTIONS
+EXPLAIN HOW PENALTY IS SCALED.
+
+## Usage Demonstration
+
+```{r, load-package, include = FALSE}
+source('svr-functions.R')
+```
+
+```{r, gen-data, include = FALSE}
+library(MASS)
+set.seed(10L)
+n <- 500
+mu <- c(1, 2)
+Sigma <- matrix(c(1, -2, 3, 2), nrow = 2)
+Sigma <- Sigma %*% t(Sigma)
+sdMat <- diag(1/sqrt(diag(Sigma)))
+corrMat <- sdMat %*% Sigma %*% sdMat
+beta <- c(-2, 1, 0.5)
+X <- as.matrix(mvrnorm(n = n, mu = mu, Sigma = Sigma))
+x <- cbind(1, X)
+u <- rnorm(n, 0, 12)
+y <- x[, 1:3] %*% beta + u
+simdata <- data.frame(cbind(y, x[, -1]))
+colnames(simdata) <- c('y', 'x1', 'x2')
+```
+
+The package includes the data set `simdata`, which we will use to demonstrate how the package may be used.
+
+```{r, show-data}
+knitr::kable(head(simdata))
+```
+
+The data generating process is `y ~ -2 + x1 + 0.5 * x2 + v`, where `v` is an error term unobserved to the researcher.
+
+The regression and inference may be performed by passing a data set, a regression equation, a bandwidth `epsilon`, and a penalty `lambda` to the function `l1svr`.
+
+```{r, basic-demo}
+fit1 <- l1svr(formula = y ~ 1 + x1 + x2,
+              data = simdata,
+              epsilon = 7,
+              lambda = 20)
+summary(fit1)
+```
+
+The coefficient estimates are stored in the entry `$coefficients` of the output, and the p-values are stored in the entry `$pvalues`.
+
+By default, statistical inference is performed and the errors are assumed to be homoskedastic.
+Inference for heteroskedastic errors may be performed by setting `heteroskedastic = TRUE`.
+This requires an estimate of the density of the errors, which is obtained using the procedure described in @powell1991estimation.
+This requires the user to pass two postive scalar tuning parameters, `h` and `kappa`.
+The bandwidth is increasing in both `h` and `kappa`, with the parameter `h` determining the quantiles of a standard normal distribution used to define the bandwidth, and the parameter `kappa` directly scaling the bandwidth.
+We refer the reader to the Online Appendix of @bai2021inference for additional details on how inference is performed under heteroskedastic errors.
+
+```{r, hetero-demo}
+fit2 <- l1svr(formula = y ~ 1 + x1 + x2,
+              data = simdata,
+              epsilon = 7,
+              lambda = 20,
+              heteroskedastic = TRUE,
+              h = 2,
+              kappa = 1.75)
+summary(fit2)
+```
+
+If desired, the user may turn off the inference procedure by setting `inference = FALSE`.
+
+## Additional output
+
+In addition to returning the coefficient estimates and p-values, the `l1svr` function returns other quantities that may be of interest to the usuer.
+
+1. The positive and negative residuals of the l1-SVR problem are returned in the entries `$primalPositive` and `$primalNegative` of the output, respectively.
+
+1. The solutions to the dual problem are returned in the entries `$dualPositive` and `$dualNegative`.
+These two vectors are used to conduct inference using a rankscore test.
+
+1. The number of observations used in estimation is returned in the entry `$N` of the output.
+
+The lengths of `$primalPositive`, `$primalNegative`, `$dualPositive`, and `$dualNegative` are all equal to `$N`.
+Each entry of each vector corresponds to an observation used for estimation.
+Entries of `$primalPositive` are equal to the residual for observations with strictly positive residuals, and are equal to `0` otherwise.
+Likewise, entries of `$primalNegative` are equal to the negative of the residual (i.e. a positive number) for observations with strictly negative residuals, and are equal to `0` otherwise.
+
+The entries in the vector `$dualPositive` are equal to `-1` for observations with residuals greater than the SVR threshold `abs(epsilon)`.
+The entries are equal to `0` for observations with residuals less than `abs(epsilon)`.
+The entries will be non-zero for observations with residuals equal to `abs(epsilon)`.
+
+The entries in the vector `$dualNegative` adhere to a similar pattern.
+That is, the entries corresponding to observations with residuals less than `-abs(epsilon)` are equal to `-1`; the entries corresponding to observations with negative residuals greater than `-abs(epsilon)` are equal to `0`; and the entries with residuals equal to `-abs(epsilon)` are non-zero.
+
+The sum of `$dualPositive` and `$dualNegative` is thus informative of whether an observation lies outside the SVR bandwidth interval `[-epsilon, epsilon]` (the sum being equal to `-1`), within the interval (the sum being `0`), or on the boundary (the sum lying between `-1` and `0`).
+
+## Help, Feature Requests and Bug Reports
+
+Please post an issue on the [GitHub repository](https://github.com/jkcshea/l1svr/issues).
+
+## References
