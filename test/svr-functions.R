@@ -89,19 +89,15 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
         ## Conduct inference
         ## Obtain residuals
         U <- Y - fullX %*% coefEstimates$coef
-        ## Concentrate out each variable one by one
-        tmpXB <- sweep(x = fullX, MARGIN = 2,
-                       STATS = rep(0, times = ncol(fullX)), FUN = '*')
-        concY <- sweep(x = -tmpXB, MARGIN = 1, STATS = Y, FUN = '+')
         ## Conduct inference for each term
         pVec <- NULL
         for (i in 1:ncol(fullX)) {
             if (tmpInt) {
                 if (i == 1) {
-                    tmpP <- svmInference(Xr = X, Zr = rep(1, n),
-                                         Yr = concY[, 1], Y = Y, U = U,
+                    tmpP <- svmInference(Xr = X, Zr = rep(1, n), Y = Y, U = U,
                                          epsilon = epsilon, lambda = lambda,
-                                         intercept = FALSE, nullGamma = 0,
+                                         intercept = FALSE,
+                                         nullGamma = 0,
                                          heteroskedastic = heteroskedastic,
                                          hc = h, kappa = kappa)
                     pVec <- c(pVec, tmpP)
@@ -109,7 +105,7 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
                     Xr <- matrix(X[, -(i - 1)], ncol = ncol(X) - 1)
                     colnames(Xr) <- colnames(X)[-(i - 1)]
                     tmpP <- svmInference(Xr = Xr, Zr = X[, (i - 1)],
-                                         Yr = concY[, i], Y = Y, U = U,
+                                         Y = Y, U = U,
                                          epsilon = epsilon, lambda = lambda,
                                          intercept = TRUE, nullGamma = 0,
                                          heteroskedastic = heteroskedastic,
@@ -120,7 +116,7 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
                 Xr <- matrix(X[, -i], ncol = ncol(X) - 1)
                 colnames(Xr) <- colnames(X)[-i]
                 tmpP <- svmInference(Xr = Xr, Zr = X[, i],
-                                     Yr = concY[, i], Y = Y, U = U,
+                                     Y = Y, U = U,
                                      epsilon = epsilon, lambda = lambda,
                                      intercept = FALSE, nullGamma = 0,
                                      heteroskedastic = heteroskedastic,
@@ -336,8 +332,6 @@ svmRegress <- function(Y, X, epsilon, lambda, intercept = TRUE) {
 #'     for which we are conducting inference.
 #' @param Zr Vector of the covariate of interest for which we are
 #'     conducting inference.
-#' @param Yr Vector of the outcome, where we have concentrated out
-#'     \code{Zr}.
 #' @param Y Vector of the outcome.
 #' @param U Vector of the residuals.
 #' @param epsilon Real scalar, bandwidth for SVR.
@@ -352,9 +346,10 @@ svmRegress <- function(Y, X, epsilon, lambda, intercept = TRUE) {
 #' @param hc Real scalar, tuning parameter for density estimation.
 #' @param kappa Real scalar, tuning parameter for density estimation.
 #' @return pvalue.
-svmInference <- function(Xr, Zr, Yr, Y, U, epsilon, lambda = 0,
+svmInference <- function(Xr, Zr, Y, U, epsilon, lambda = 0,
                          intercept = TRUE, nullGamma = 0,
                          heteroskedastic = FALSE, hc = 0.5, kappa = 1) {
+    Yr <- Y - Zr * nullGamma
     tau <- 0.5
     n <- length(Yr)
     uHat <- U + epsilon
@@ -542,7 +537,6 @@ ciIter <- function(gamma0, index, intercept, Y, X, U, epsilon, lambda,
         args$Xr <- Xr
         args$Zr <- X[, index]
     }
-    args$Yr <- Y - gamma0 * args$Zr
     do.call(svmInference, args)
 }
 
@@ -672,7 +666,6 @@ ciIterOptim <- function(target, gamma0, index, intercept, Y, X, U,
         args$Xr <- Xr
         args$Zr <- X[, index]
     }
-    args$Yr <- Y - gamma0 * args$Zr
     pvalue <- do.call(svmInference, args)
     return(abs(pvalue - target))
 }

@@ -44,6 +44,7 @@ res1
 summary(res1)
 
 ## Homoskedastic inference
+source('svr-functions.R')
 res2 <- l1svr(formula = y ~ 1 +  x1 + x2, data = simdata,
       epsilon = tmpEpsilon, lambda = tmpLambda, inference = TRUE)
 res2
@@ -99,7 +100,7 @@ fit3 <- l1svr(formula = y ~ 1 + x1 + x2,
               lambda = 20,
               confidence = TRUE,
               confidence.level = 0.95,
-              confidence.iter = 20)
+              confidence.iter = 10)
 summary(fit3)
 
 fit3$ci
