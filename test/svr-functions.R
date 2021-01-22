@@ -9,9 +9,10 @@
 #' @param intercept (boolean) Set to \code{TRUE} if an intercept
 #'     should be included in the regression.
 l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
-                  confidence = FALSE, confidence.level = 0.05,
+                  confidence = FALSE, confidence.level = 0.95,
                   confidence.iter = 25,
-                  confidence.tol = 1e-3,
+                  confidence.tol = 2.5e-3,
+                  confidence.same = 1e-06,
                   heteroskedastic = FALSE,
                   h = NULL, kappa = NULL) {
     origCall <- match.call()
@@ -127,7 +128,7 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
             ## ## determining the confidence intervals.
             ## if (optimAlt) {
             ## args <- list(f = ciIterOptim,
-            ##                  target = confidence.level,
+            ##                  target = 1 - confidence.level,
             ##                  intercept = tmpInt, Y = Y,
             ##                  X = X, U = U, epsilon = epsilon,
             ##                  lambda = lambda,
@@ -135,9 +136,10 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
             ##              kappa = kappa)
             ## }
             args <- list(FUN = ciIter,
-                         target = confidence.level,
+                         target = 1 - confidence.level,
                          iter.max = confidence.iter,
                          tol = confidence.tol,
+                         tol.same = confidence.same,
                          intercept = tmpInt, Y = Y,
                          X = X, U = U, epsilon = epsilon,
                          lambda = lambda,
@@ -490,81 +492,6 @@ summary.l1svr <- function(object, ...) {
     }
 }
 
-## #' Function to solve equations via grid search
-## #'
-## #' This function solves an equation using a grid search.
-## #'
-## #' @param FUN A function with a scalar argument.
-## #' @param init Scalar, the starting point for the grid search.
-## #' @param target Scalar, the target value for the function.
-## #' @param increment Scalar, starting increment for the grid
-## #'     search. This increment is progessively halved.
-## #' @param tol Scalar, tolerance to determine when the target value is
-## #'     reached.
-## #' @param left Boolean, indicate the direction of search. For example,
-## #'     \code{x^2 = 4} has two solutions, one being \code{-2} and the
-## #'     other being \code{2}. If \code{init = 0} and \code{left =
-## #'     TRUE}, then this function would return \code{-2}. If instead
-## #'     \code{left = FALSE}, then this function would return \code{2}.
-## #' @return Scalar, the argument value for which \code{FUN} is equal to
-## #'     \code{target}.
-## #'
-## gridSearch <- function(FUN, init = 0, target, increment = 2,
-##                        tol = 5e-3, left = FALSE, iter.max = 50,
-##                        ...) {
-##     exponent <- 0
-##     print('init')
-##     print(init)
-##     initVal <- FUN(init, ...)
-##     print('init value')
-##     print(initVal)
-##     diff <- target - initVal
-##     ## if (left) diff <- -diff
-##     if (diff > 0) {
-##             tooSmall <- TRUE
-##             direction <- 1
-##     }
-##     if (diff < 0) {
-##             tooSmall <- FALSE
-##             direction <- -1
-##     }
-##     iter.count <- 1
-##     while (abs(diff) > tol & iter.count <= iter.max) {
-##         init <- init + direction * abs(increment) ^ exponent
-##         print('New x')
-##         print(init)
-##         value <- FUN(init, ...)
-##         diff <- target - value
-##         ## if (left) diff <- -diff
-##         if (diff > 0) {
-##             if (tooSmall == FALSE) {
-##                 direction <- direction * -1
-##                 exponent <- exponent - 1
-##             }
-##             tooSmall <- TRUE
-##         }
-##         if (diff < 0) {
-##             if (tooSmall == TRUE) {
-##                 direction <- direction * -1
-##                 exponent <- exponent - 1
-##             }
-##             tooSmall <- FALSE
-##         }
-##         iter.count <- iter.count + 1
-##     }
-##     if (abs(diff) > tol) {
-##         warning(gsub('\\s+', ' ',
-##                      'Calculation of confidence intervals terminated,
-##                       iteration maximum reached.'),
-##                 call. = FALSE)
-##     }
-##     return(list(x = init,
-##                 value = value,
-##                 iters = iter.count - 1,
-##                 tol = tol))
-## }
-
-
 ciIter <- function(gamma0, index, intercept, Y, X, U, epsilon, lambda,
                heteroskedastic, h, kappa) {
     args <- list(nullGamma = gamma0, Y = Y, U = U,
@@ -596,7 +523,8 @@ ciIter <- function(gamma0, index, intercept, Y, X, U, epsilon, lambda,
 
 
 gridSearch <- function(FUN, init = 0, target, increment = 2,
-                       tol = 1e-3, left = FALSE, iter.max = 25,
+                       tol = 2.5e-3, tol.same = 1e-06,
+                       left = FALSE, iter.max = 25,
                        ...) {
     exponent <- 0
     if (left) {
@@ -620,9 +548,10 @@ gridSearch <- function(FUN, init = 0, target, increment = 2,
     iter.count <- 1
     sameX <- 0
     sameX.lim <- 3
+    minDiff <- Inf
     while (abs(diff) > tol & iter.count <= iter.max & sameX < sameX.lim) {
         newX <- x + dirMod * farDirection * abs(increment) * 2.01 ^ exponent
-        if (abs(newX - x) < 1e-6) sameX <- sameX + 1
+        if (abs(newX - x) < tol.same) sameX <- sameX + 1
         x <- newX
         if (left) {
             if (x > init) x <- init
@@ -645,6 +574,11 @@ gridSearch <- function(FUN, init = 0, target, increment = 2,
             }
             tooFar <- TRUE
         }
+        if (abs(diff) < minDiff) {
+            minDiff <- abs(diff)
+            bestX <- x
+            bestPvalue <- value
+        }
         iter.count <- iter.count + 1
     }
     iter.count <- iter.count - 1
@@ -663,8 +597,8 @@ gridSearch <- function(FUN, init = 0, target, increment = 2,
                 call. = FALSE)
         status <- 3
     }
-    return(c(bound = unname(x),
-             pvalue = value,
+    return(c(bound = unname(bestX),
+             pvalue = bestPvalue,
              iters = iter.count,
              tol = tol,
              optimal = status))

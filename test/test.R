@@ -87,9 +87,12 @@ fullRes <- l1svr(formula = y ~ 0 +  x1 + x2, data = simdata,
                  epsilon = tmpEpsilon, lambda = tmpLambda,
                  inference = TRUE,
                  confidence = TRUE,
-                 confidence.iter = 30)
+                 confidence.iter = 20,
+                 confidence.level = 0.9)
 
 fullRes$ci
+
+summary(fullRes)
 
 
 ciTable <- data.frame(cbind(fullRes$ci$lower$bound, fullRes$ci$upper$bound))
