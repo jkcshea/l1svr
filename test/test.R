@@ -86,29 +86,23 @@ summary(res4)
 fullRes <- l1svr(formula = y ~ 0 +  x1 + x2, data = simdata,
                  epsilon = tmpEpsilon, lambda = tmpLambda,
                  inference = TRUE,
-                 confidence = TRUE,
+                 confidence = FALSE,
                  confidence.iter = 20,
                  confidence.level = 0.9)
-
-fullRes$ci
-
 summary(fullRes)
 
 
-ciTable <- data.frame(cbind(fullRes$ci$lower$bound, fullRes$ci$upper$bound))
-statusLower <- rep('  ', nrow(fullRes$ci$lower))
-statusLower[which(fullRes$ci$lower$optimal == 2)] <- ' *'
-statusLower[which(fullRes$ci$lower$optimal == 3)] <- '**'
-statusUpper <- rep('  ', nrow(fullRes$ci$upper))
-statusUpper[which(fullRes$ci$upper$optimal == 2)] <- '* '
-statusUpper[which(fullRes$ci$upper$optimal == 3)] <- '**'
-ciTable <- cbind(statusLower, ciTable, statusUpper)
-colnames(ciTable) <- c('', 'Lower', 'Upper', '')
-rownames(ciTable) <- rownames(fullRes$ci$lower)
-ciTable
+source('svr-functions.R')
+fit3 <- l1svr(formula = y ~ 1 + x1 + x2,
+              data = simdata,
+              epsilon = 7,
+              lambda = 20,
+              confidence = TRUE,
+              confidence.level = 0.95,
+              confidence.iter = 20)
+summary(fit3)
 
-
-
+fit3$ci
 
 
 ## You want to vary the amount you concentrate out, that is all you

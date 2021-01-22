@@ -31,7 +31,7 @@ We refer the reader to @bai2021inference for technical details on how the estima
 
 ## Installation and Requirements
 
-**l1svr** can be installed from CRAN via
+**l1svr** can be installed from CRAN via **[Not yet,but we'll upload it.]**
 ```{r eval = FALSE}
 install.packages("l1svr")
 ```
@@ -47,6 +47,8 @@ This requires a Gurobi software license, which Gurobi Optimization offers at no 
 Gurobi and its R package **gurobi** can be optained from [Gurobi Optimization](http://www.gurobi.com/index).
 A very clear installation guide for Gurobi can be found [here](https://cran.r-project.org/package=prioritizr/vignettes/gurobi_installation.html)
 
+**[I will incorporate `lp_solve` as a free alternative]**
+
 <!--
     i. The **lpSolveAPI** package, which is free and open-source, and available from CRAN.
     Note that **lpSolveAPI** is a wrapper for [lp_solve](http://lpsolve.sourceforge.net/5.5/), which is no longer
@@ -55,8 +57,10 @@ A very clear installation guide for Gurobi can be found [here](https://cran.r-pr
 
 ## Background
 
-SHOW THE LOSS FUNCTIONS
-EXPLAIN HOW PENALTY IS SCALED.
+**[To be written]**
+
+* Show the loss function to explain `epsilon`
+* Explain the penalty term `lambda`
 
 ## Usage Demonstration
 
@@ -90,6 +94,8 @@ knitr::kable(head(simdata))
 
 The data generating process is `y ~ -2 + x1 + 0.5 * x2 + v`, where `v` is an error term unobserved to the researcher.
 
+### Basic estimation and inference
+
 The regression and inference may be performed by passing a data set, a regression equation, a bandwidth `epsilon`, and a penalty `lambda` to the function `l1svr`.
 
 ```{r, basic-demo}
@@ -119,6 +125,43 @@ fit2 <- l1svr(formula = y ~ 1 + x1 + x2,
               kappa = 1.75)
 summary(fit2)
 ```
+
+### Constructing confidence intervals
+
+The `l1svr` function is also able to construct confidence intervals by inverting the test procedure.
+This requires the function to iterate over a sequence of conjectured coefficients and perform the SVR regression rankscore test for each conjectured coefficient value.
+The end points of the confidence interval correspond to coefficients whose p-values fall within some tolerance of the size of the test.
+This is a compuationally intensive procedure and is disabled by default.
+
+To enable the estimation of confidence intervals, set `confidence = TRUE`.
+The confidence level may be set using the parameter `confidence.level`, which in turn determines the size of the test to be `1 - confidence.level`.
+The maximum number of iterations performed may be set using `confidence.iter`.
+In the example below, the confidence intervals are constructed assuming that the errors are homoskedastic.
+
+```{r, ci-demo}
+fit3 <- l1svr(formula = y ~ 1 + x1 + x2,
+              data = simdata,
+              epsilon = 7,
+              lambda = 20,
+              confidence = TRUE,
+              confidence.level = 0.95,
+              confidence.iter = 20)
+summary(fit3)
+```
+
+Additional details on the confidence interval estimates are returned in the entry `$ci` of the output.
+
+```{r, full-ci-output}
+fit3$ci
+```
+
+The iterative procedure terminates when it finds lower and upper bounds of the confidence interval whose p-values differ by less than `confidence.tol` from the size of the test.
+However, there are two cases where the confidence interval estimation procedure will be terminated before this takes place.
+The first case is simply that the iteration limit has been reached, and can be avoided by increasing `confidence.iter`.
+The second case is that the changes in the estimated bounds across successive iterations have become sufficiently small.
+This implies that the LP solver is unable to perform the test at the level of precision requried for the p-value of the bound to fall within `confidence.tol` of the size of the test.
+The user can try to avoid this by reducing `confidence.same`, which sets the tolerance level determining whether two bounds from successive iterations of the procedure are sufficently close.
+
 
 If desired, the user may turn off the inference procedure by setting `inference = FALSE`.
 

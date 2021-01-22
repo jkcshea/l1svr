@@ -54,6 +54,15 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
                       only used when 'inference = TRUE'."),
                 call. = FALSE)
     }
+    if (!confidence && (hasArg(confidence.level) |
+                        hasArg(confidence.iter) |
+                        hasArg(confidence.tol) |
+                        hasArg(confidence.same))) {
+        warning(gsub('\\s+', ' ',
+                     "All arguments beginning with 'confidence.' are ignored
+                      unless 'confidence = TRUE'."),
+                call. = FALSE)
+    }
     ## Construct design matrix
     tmpMf <- model.frame(formula = formula, data = data)
     tmpMt <- terms(x = formula, data = data, rhs = 1)
@@ -145,9 +154,10 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
                          lambda = lambda,
                          heteroskedastic = heteroskedastic, h = h,
                          kappa = kappa)
+            cat('\n')
             for (i in 1:ncol(fullX)) {
-                cat(paste0('Calculating confidence intervals for ',
-                    colnames(X)[i], '...\n'))
+                cat(paste0('Estimating confidence interval for ',
+                    colnames(fullX)[i], '...\n'))
                 ## ## Below is code for an alternative method for
                 ## ## determining the confidence intervals.
                 ## if (optimAlt) {
@@ -180,13 +190,28 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
                 confidenceMatLb <- rbind(confidenceMatLb, lb)
                 confidenceMatUb <- rbind(confidenceMatUb, ub)
             }
+            cat('\n')
             confidenceMatLb <- data.frame(confidenceMatLb)
             confidenceMatUb <- data.frame(confidenceMatUb)
-            rownames(confidenceMatLb) <- colnames(X)
-            rownames(confidenceMatUb) <- colnames(X)
+            rownames(confidenceMatLb) <- colnames(fullX)
+            rownames(confidenceMatUb) <- colnames(fullX)
             coefEstimates$ci <- list(lower = confidenceMatLb,
                                      upper = confidenceMatUb,
                                      level = confidence.level)
+            if (2 %in% confidenceMatLb$optimal |
+                2 %in% confidenceMatUb$optimal) {
+                warning(gsub('\\s+', ' ',
+                             'Calculation of confidence intervals terminated,
+                              iteration maximum reached.'),
+                        call. = FALSE)
+            }
+            if (3 %in% confidenceMatLb$optimal |
+                3 %in% confidenceMatUb$optimal) {
+                warning(gsub('\\s+', ' ',
+                             'Calculation of confidence intervals terminated,
+                              precision limit reached.'),
+                        call. = FALSE)
+            }
         }
         return(coefEstimates)
     }
@@ -482,7 +507,7 @@ summary.l1svr <- function(object, ...) {
         ciTable <- cbind(statusLower, ciTable, statusUpper)
         colnames(ciTable) <- c('', 'Lower', 'Upper', '')
         rownames(ciTable) <- rownames(object$ci$lower)
-        cat(paste0(round((1 - object$ci$level) * 100, digits = 2),
+        cat(paste0(round(object$ci$level * 100, digits = 2),
                    '% confidence intervals:\n'))
         print(ciTable)
         cat('---\n')
@@ -584,17 +609,17 @@ gridSearch <- function(FUN, init = 0, target, increment = 2,
     iter.count <- iter.count - 1
     status <- 1
     if (iter.count == iter.max && abs(diff) > tol) {
-        warning(gsub('\\s+', ' ',
-                     'Calculation of confidence intervals terminated,
-                      iteration maximum reached.'),
-                call. = FALSE)
+        ## warning(gsub('\\s+', ' ',
+        ##              'Calculation of confidence intervals terminated,
+        ##               iteration maximum reached.'),
+        ##         call. = FALSE)
         status <- 2
     }
     if (sameX == sameX.lim && abs(diff) > tol) {
-        warning(gsub('\\s+', ' ',
-                     'Calculation of confidence intervals terminated,
-                      precision limit reached.'),
-                call. = FALSE)
+        ## warning(gsub('\\s+', ' ',
+        ##              'Calculation of confidence intervals terminated,
+        ##               precision limit reached.'),
+        ##         call. = FALSE)
         status <- 3
     }
     return(c(bound = unname(bestX),
