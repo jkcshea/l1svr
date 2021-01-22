@@ -4,7 +4,7 @@ source('svr-functions.R')
 
 ## Generate random data
 set.seed(10L)
-n <- 500
+n <- 1000
 mu <- c(1, 2)
 Sigma <- matrix(c(1, -2, 3, 2), nrow = 2)
 Sigma <- Sigma %*% t(Sigma)
@@ -80,17 +80,35 @@ res4 <- l1svr(formula = y ~ 0 +  x1 + x2, data = simdata,
               epsilon = tmpEpsilon, lambda = tmpLambda,
               inference = TRUE,
               confidence = FALSE)
-l1svr(formula = y ~ 0 +  x1 + x2, data = simdata,
-              epsilon = tmpEpsilon, lambda = tmpLambda,
-              inference = TRUE,
-              confidence = TRUE)
-
-load('test-args.Rdata')
-args$init
-args$increment
-args$left
 
 source('svr-functions.R')
 summary(res4)
-do.call(gridSearch, args)
+fullRes <- l1svr(formula = y ~ 0 +  x1 + x2, data = simdata,
+                 epsilon = tmpEpsilon, lambda = tmpLambda,
+                 inference = TRUE,
+                 confidence = TRUE,
+                 confidence.iter = 30)
+
+fullRes$ci
+
+
+ciTable <- data.frame(cbind(fullRes$ci$lower$bound, fullRes$ci$upper$bound))
+statusLower <- rep('  ', nrow(fullRes$ci$lower))
+statusLower[which(fullRes$ci$lower$optimal == 2)] <- ' *'
+statusLower[which(fullRes$ci$lower$optimal == 3)] <- '**'
+statusUpper <- rep('  ', nrow(fullRes$ci$upper))
+statusUpper[which(fullRes$ci$upper$optimal == 2)] <- '* '
+statusUpper[which(fullRes$ci$upper$optimal == 3)] <- '**'
+ciTable <- cbind(statusLower, ciTable, statusUpper)
+colnames(ciTable) <- c('', 'Lower', 'Upper', '')
+rownames(ciTable) <- rownames(fullRes$ci$lower)
+ciTable
+
+
+
+
+
+## You want to vary the amount you concentrate out, that is all you
+## have to do. So for each variable, you do the grid search over the
+## values that are concenterated out.
 

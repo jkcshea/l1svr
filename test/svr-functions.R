@@ -1,5 +1,17 @@
+#' Function to perform SVM regression under l1 regularization
+#'
+#' @param formula Regression formula.
+#' @param Y (vector) Dependent variable.
+#' @param X (2d array) Independent variables, excluding column of
+#'     constants for the intercept.
+#' @param epsilon (real) Parameter defining soft-thresholding rule.
+#' @param lambda (real) Tuning parameter to scale l1 penalty.
+#' @param intercept (boolean) Set to \code{TRUE} if an intercept
+#'     should be included in the regression.
 l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
-                  confidence = FALSE,
+                  confidence = FALSE, confidence.level = 0.05,
+                  confidence.iter = 25,
+                  confidence.tol = 1e-3,
                   heteroskedastic = FALSE,
                   h = NULL, kappa = NULL) {
     origCall <- match.call()
@@ -108,68 +120,72 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
         }
         names(pVec) <- origNames
         coefEstimates$pvalues <- pVec
-        ## ---------------------------------------
-        ## TESTING
-        ## confidence <- TRUE
-        alpha <- 0.05
         if (confidence) {
-            confidenceMat <- NULL
+            confidenceMatLb <- NULL
+            confidenceMatUb <- NULL
+            ## ## Below is code for an alternative method for
+            ## ## determining the confidence intervals.
+            ## if (optimAlt) {
+            ## args <- list(f = ciIterOptim,
+            ##                  target = confidence.level,
+            ##                  intercept = tmpInt, Y = Y,
+            ##                  X = X, U = U, epsilon = epsilon,
+            ##                  lambda = lambda,
+            ##                  heteroskedastic = heteroskedastic, h = h,
+            ##              kappa = kappa)
+            ## }
+            args <- list(FUN = ciIter,
+                         target = confidence.level,
+                         iter.max = confidence.iter,
+                         tol = confidence.tol,
+                         intercept = tmpInt, Y = Y,
+                         X = X, U = U, epsilon = epsilon,
+                         lambda = lambda,
+                         heteroskedastic = heteroskedastic, h = h,
+                         kappa = kappa)
             for (i in 1:ncol(fullX)) {
-                args <- list(FUN = svmInference,
-                             init = coefEstimates$coef[i],
-                             target = alpha,
-                             tol = 5e-3,
-                             Y = Y, U = U,
-                             epsilon = epsilon, lambda = lambda,
-                             intercept = FALSE,
-                             heteroskedastic = heteroskedastic,
-                             hc = h, kappa = kappa)
-                if (tmpInt) {
-                    if (i == 1) {
-                        args$intercept <- FALSE
-                        args$Xr <- X
-                        args$Zr <- rep(1, n)
-                        args$Yr <- concY[, 1]
-                    } else {
-                        Xr <- matrix(X[, -(i - 1)], ncol = ncol(X) - 1)
-                        colnames(Xr) <- colnames(X)[-(i - 1)]
-                        args$intercept <- TRUE
-                        args$Xr <- Xr
-                        args$Zr = X[, (i - 1)]
-                        args$Yr = concY[, i]
-                    }
-                } else {
-                    Xr <- matrix(X[, -i], ncol = ncol(X) - 1)
-                    colnames(Xr) <- colnames(X)[-i]
-                    args$intercept <- FALSE
-                    args$Xr <- Xr
-                    args$Zr <- X[, i]
-                    args$Yr <- concY[, i]
-                }
+                cat(paste0('Calculating confidence intervals for ',
+                    colnames(X)[i], '...\n'))
+                ## ## Below is code for an alternative method for
+                ## ## determining the confidence intervals.
+                ## if (optimAlt) {
+                ##     args$index <- i
+                ##     ## Lower bound
+                ##     t0 <- Sys.time()
+                ##     args$interval <-
+                ##         c(coefEstimates$coef[i] - 5 * abs(coefEstimates$coef[i]),
+                ##           coefEstimates$coef[i])
+                ##     lb <- do.call(optimize, args)
+                ##     ## Upper bound
+                ##     t1 <- Sys.time()
+                ##     args$interval <-
+                ##         c(coefEstimates$coef[i],
+                ##           coefEstimates$coef[i] + 5 * abs(coefEstimates$coef[i]))
+                ##     ub <- do.call(optimize, args)
+                ## }
                 ## Find lower bound
-                print('coefEstimate$coef[i]')
-                print(coefEstimates$coef)
-                print(coefEstimates$coef[i])
+                args$index <- i
+                args$init <- coefEstimates$coef[i]
                 args$left <- TRUE
-                args$increment <- -abs(coefEstimates$coef[i])
-                save(args, file = 'test-args.Rdata')
-                stop('end of test')
-                lb <- do.call(gridSearch, args)
-                print('found lb')
-                print(lb)
-                ## Find upper bound
-                args$left <- FALSE
+                t0 <- Sys.time()
                 args$increment <- abs(coefEstimates$coef[i])
+                lb <- do.call(gridSearch, args)
+                ## Find the upper bound
+                t1 <- Sys.time()
+                args$left <- FALSE
                 ub <- do.call(gridSearch, args)
-                print('found ub')
-                print(ub)
-                ## Save results
-                confidenceMat <- rbind(confidenceMat, c(lb, ub))
+                ## Store results
+                confidenceMatLb <- rbind(confidenceMatLb, lb)
+                confidenceMatUb <- rbind(confidenceMatUb, ub)
             }
-            print('this is the confidence mat')
-            print(confidenceMat)
+            confidenceMatLb <- data.frame(confidenceMatLb)
+            confidenceMatUb <- data.frame(confidenceMatUb)
+            rownames(confidenceMatLb) <- colnames(X)
+            rownames(confidenceMatUb) <- colnames(X)
+            coefEstimates$ci <- list(lower = confidenceMatLb,
+                                     upper = confidenceMatUb,
+                                     level = confidence.level)
         }
-        ## ---------------------------------------
         return(coefEstimates)
     }
 }
@@ -325,10 +341,10 @@ svmInference <- function(Xr, Zr, Yr, Y, U, epsilon, lambda = 0,
     }
     if (epsilon != 0) {
         if (!heteroskedastic) {
-            rho1 <- mean(Yr <= Xrc %*% concResults$coefficients +
-                         nullGamma * Zr - epsilon)
-            rho2 <- mean(Yr >= Xrc %*% concResults$coefficients +
-                         nullGamma * Zr + epsilon)
+            rho1 <- mean(Yr <= (Xrc %*% concResults$coefficients +
+                         nullGamma * Zr - epsilon))
+            rho2 <- mean(Yr >= (Xrc %*% concResults$coefficients +
+                         nullGamma * Zr + epsilon))
             rho <- rho1 + rho2
         } else {
             testStatNumer <- t(Zr) %*% alphaPlus / sqrt(n)
@@ -452,77 +468,252 @@ summary.l1svr <- function(object, ...) {
         cat("Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1\n\n")
         ## cat('Obs: ', object$N, '\n')
     }
+    if (!is.null(object$ci)) {
+        ciTable <- data.frame(cbind(object$ci$lower$bound,
+                                    object$ci$upper$bound))
+        statusLower <- rep('  ', nrow(object$ci$lower))
+        statusLower[which(object$ci$lower$optimal == 2)] <- ' *'
+        statusLower[which(object$ci$lower$optimal == 3)] <- '**'
+        statusUpper <- rep('  ', nrow(object$ci$upper))
+        statusUpper[which(object$ci$upper$optimal == 2)] <- '* '
+        statusUpper[which(object$ci$upper$optimal == 3)] <- '**'
+        ciTable <- cbind(statusLower, ciTable, statusUpper)
+        colnames(ciTable) <- c('', 'Lower', 'Upper', '')
+        rownames(ciTable) <- rownames(object$ci$lower)
+        cat(paste0(round((1 - object$ci$level) * 100, digits = 2),
+                   '% confidence intervals:\n'))
+        print(ciTable)
+        cat('---\n')
+        cat("Conf. interval codes:\n")
+        cat("'*'  Iteration limit reached\n")
+        cat("'**' Precision limit reached\n")
+    }
 }
 
-#' Function to solve equations via grid search
-#'
-#' This function solves an equation using a grid search.
-#'
-#' @param FUN A function with a scalar argument.
-#' @param init Scalar, the starting point for the grid search.
-#' @param target Scalar, the target value for the function.
-#' @param increment Scalar, starting increment for the grid
-#'     search. This increment is progessively halved.
-#' @param tol Scalar, tolerance to determine when the target value is
-#'     reached.
-#' @param left Boolean, indicate the direction of search. For example,
-#'     \code{x^2 = 4} has two solutions, one being \code{-2} and the
-#'     other being \code{2}. If \code{init = 0} and \code{left =
-#'     TRUE}, then this function would return \code{-2}. If instead
-#'     \code{left = FALSE}, then this function would return \code{2}.
-#' @return Scalar, the argument value for which \code{FUN} is equal to
-#'     \code{target}.
-#'
+## #' Function to solve equations via grid search
+## #'
+## #' This function solves an equation using a grid search.
+## #'
+## #' @param FUN A function with a scalar argument.
+## #' @param init Scalar, the starting point for the grid search.
+## #' @param target Scalar, the target value for the function.
+## #' @param increment Scalar, starting increment for the grid
+## #'     search. This increment is progessively halved.
+## #' @param tol Scalar, tolerance to determine when the target value is
+## #'     reached.
+## #' @param left Boolean, indicate the direction of search. For example,
+## #'     \code{x^2 = 4} has two solutions, one being \code{-2} and the
+## #'     other being \code{2}. If \code{init = 0} and \code{left =
+## #'     TRUE}, then this function would return \code{-2}. If instead
+## #'     \code{left = FALSE}, then this function would return \code{2}.
+## #' @return Scalar, the argument value for which \code{FUN} is equal to
+## #'     \code{target}.
+## #'
+## gridSearch <- function(FUN, init = 0, target, increment = 2,
+##                        tol = 5e-3, left = FALSE, iter.max = 50,
+##                        ...) {
+##     exponent <- 0
+##     print('init')
+##     print(init)
+##     initVal <- FUN(init, ...)
+##     print('init value')
+##     print(initVal)
+##     diff <- target - initVal
+##     ## if (left) diff <- -diff
+##     if (diff > 0) {
+##             tooSmall <- TRUE
+##             direction <- 1
+##     }
+##     if (diff < 0) {
+##             tooSmall <- FALSE
+##             direction <- -1
+##     }
+##     iter.count <- 1
+##     while (abs(diff) > tol & iter.count <= iter.max) {
+##         init <- init + direction * abs(increment) ^ exponent
+##         print('New x')
+##         print(init)
+##         value <- FUN(init, ...)
+##         diff <- target - value
+##         ## if (left) diff <- -diff
+##         if (diff > 0) {
+##             if (tooSmall == FALSE) {
+##                 direction <- direction * -1
+##                 exponent <- exponent - 1
+##             }
+##             tooSmall <- TRUE
+##         }
+##         if (diff < 0) {
+##             if (tooSmall == TRUE) {
+##                 direction <- direction * -1
+##                 exponent <- exponent - 1
+##             }
+##             tooSmall <- FALSE
+##         }
+##         iter.count <- iter.count + 1
+##     }
+##     if (abs(diff) > tol) {
+##         warning(gsub('\\s+', ' ',
+##                      'Calculation of confidence intervals terminated,
+##                       iteration maximum reached.'),
+##                 call. = FALSE)
+##     }
+##     return(list(x = init,
+##                 value = value,
+##                 iters = iter.count - 1,
+##                 tol = tol))
+## }
+
+
+ciIter <- function(gamma0, index, intercept, Y, X, U, epsilon, lambda,
+               heteroskedastic, h, kappa) {
+    args <- list(nullGamma = gamma0, Y = Y, U = U,
+                 epsilon = epsilon, lambda = lambda,
+                 heteroskedastic = heteroskedastic,
+                 hc = h, kappa = kappa)
+    if (intercept) {
+        if (index == 1) {
+            args$intercept <- FALSE
+            args$Xr <- X
+            args$Zr <- rep(1, n)
+        } else {
+            Xr <- matrix(X[, -(index - 1)], ncol = ncol(X) - 1)
+            colnames(Xr) <- colnames(X)[-(index - 1)]
+            args$intercept <- TRUE
+            args$Xr <- Xr
+            args$Zr = X[, (index - 1)]
+        }
+    } else {
+        Xr <- matrix(X[, -index], ncol = ncol(X) - 1)
+        colnames(Xr) <- colnames(X)[-index]
+        args$intercept <- FALSE
+        args$Xr <- Xr
+        args$Zr <- X[, index]
+    }
+    args$Yr <- Y - gamma0 * args$Zr
+    do.call(svmInference, args)
+}
+
+
 gridSearch <- function(FUN, init = 0, target, increment = 2,
-                       tol = 5e-3, left = FALSE, iter.max = 10,
+                       tol = 1e-3, left = FALSE, iter.max = 25,
                        ...) {
     exponent <- 0
-    initVal <- FUN(init, ...)
-    diff <- target - initVal
-    if (left) diff <- -diff
-    if (diff > 0) {
-            tooSmall <- TRUE
-            direction <- 1
+    if (left) {
+        farDirection <- -1
     }
-    if (diff < 0) {
-            tooSmall <- FALSE
-            direction <- -1
+    if (!left) {
+        farDirection <- +1
+    }
+    x <- init + farDirection * abs(increment)
+    value <- FUN(x, ...)
+    diff <- target - value
+    if (diff < 0) { ## i.e. haven't gone far enough
+        tooFar <- FALSE
+        dirMod <- 1
+    }
+    if (diff > 0) { ## i.e. gone too far
+        tooFar <- TRUE
+        dirMod <- -1
+        exponent <- exponent - 1
     }
     iter.count <- 1
-    while (abs(diff) > tol & iter.count <= iter.max) {
-        print('ORIGINAL init')
-        print(init)
-        print('stuff added')
-        print(direction * sign(increment) * abs(increment) ^ exponent)
-        init <- init + direction * sign(increment) * abs(increment) ^ exponent
-        value <- FUN(init, ...)
+    sameX <- 0
+    sameX.lim <- 3
+    while (abs(diff) > tol & iter.count <= iter.max & sameX < sameX.lim) {
+        newX <- x + dirMod * farDirection * abs(increment) * 2.01 ^ exponent
+        if (abs(newX - x) < 1e-6) sameX <- sameX + 1
+        x <- newX
+        if (left) {
+            if (x > init) x <- init
+        } else {
+            if (x < init) x <- init
+        }
+        value <- FUN(x, ...)
         diff <- target - value
-        if (left) diff <- -diff        
-        if (diff > 0) {
-            if (tooSmall == FALSE) {
-                direction <- direction * -1
+        if (diff <= 0) { ## i.e. haven't gone far enough from initial point
+            if (tooFar) {
+                dirMod <- 1
                 exponent <- exponent - 1
             }
-            tooSmall <- TRUE
+            tooFar <- FALSE
         }
-        if (diff < 0) {
-            if (tooSmall == TRUE) {
-                direction <- direction * -1
+        if (diff >= 0) { ## i.e. gone too far from initial point
+            if (!tooFar) {
+                dirMod <- -1
                 exponent <- exponent - 1
             }
-            tooSmall <- FALSE
+            tooFar <- TRUE
         }
-        print('init value')
-        print(init)
-        print('pvalue')
-        print(value)
         iter.count <- iter.count + 1
     }
-    if (abs(diff) > tol) {
+    iter.count <- iter.count - 1
+    status <- 1
+    if (iter.count == iter.max && abs(diff) > tol) {
         warning(gsub('\\s+', ' ',
                      'Calculation of confidence intervals terminated,
                       iteration maximum reached.'),
                 call. = FALSE)
+        status <- 2
     }
-    return(init)
+    if (sameX == sameX.lim && abs(diff) > tol) {
+        warning(gsub('\\s+', ' ',
+                     'Calculation of confidence intervals terminated,
+                      precision limit reached.'),
+                call. = FALSE)
+        status <- 3
+    }
+    return(c(bound = unname(x),
+             pvalue = value,
+             iters = iter.count,
+             tol = tol,
+             optimal = status))
+}
+
+#' Alternative function for determining confidence intervals
+#'
+#' This function should be used with the R function \code{optimize} to
+#' find the bounds of the confidence interval.
+#'
+#' @param target Target, equal to the size of the test.
+#' @param gamma0 Scalar, a conjectured value of the coefficient for
+#'     the covariate of interest, i.e. the covariate for which the
+#'     confidence interval is being constructed.
+#' @param index Integer, indexes which covariate is of interest.
+#' @param intercept Boolean, indicates whether an intercept term is
+#'     included in the regression.
+#' @param Y Vector of dependent variable.
+#' @param X Matrix of covariates.
+#' @param U Vector of residuals from regressing \code{Y} on \code{X}
+#'     using l1svr.
+#'
+#' @inheritParams ivmteEstimate
+ciIterOptim <- function(target, gamma0, index, intercept, Y, X, U,
+                        epsilon, lambda, heteroskedastic, h, kappa) {
+    args <- list(nullGamma = gamma0, Y = Y, U = U,
+                 epsilon = epsilon, lambda = lambda,
+                 heteroskedastic = heteroskedastic,
+                 hc = h, kappa = kappa)
+    if (intercept) {
+        if (index == 1) {
+            args$intercept <- FALSE
+            args$Xr <- X
+            args$Zr <- rep(1, n)
+        } else {
+            Xr <- matrix(X[, -(index - 1)], ncol = ncol(X) - 1)
+            colnames(Xr) <- colnames(X)[-(index - 1)]
+            args$intercept <- TRUE
+            args$Xr <- Xr
+            args$Zr = X[, (index - 1)]
+        }
+    } else {
+        Xr <- matrix(X[, -index], ncol = ncol(X) - 1)
+        colnames(Xr) <- colnames(X)[-index]
+        args$intercept <- FALSE
+        args$Xr <- Xr
+        args$Zr <- X[, index]
+    }
+    args$Yr <- Y - gamma0 * args$Zr
+    pvalue <- do.call(svmInference, args)
+    return(abs(pvalue - target))
 }
