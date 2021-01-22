@@ -193,7 +193,8 @@ l1svr <- function(formula, data, epsilon, lambda, inference = TRUE,
             rownames(confidenceMatUb) <- colnames(fullX)
             coefEstimates$ci <- list(lower = confidenceMatLb,
                                      upper = confidenceMatUb,
-                                     level = confidence.level)
+                                     level = confidence.level,
+                                     tol = confidence.tol)
             if (2 %in% confidenceMatLb$optimal |
                 2 %in% confidenceMatUb$optimal) {
                 warning(gsub('\\s+', ' ',
@@ -619,7 +620,6 @@ gridSearch <- function(FUN, init = 0, target, increment = 2,
     return(c(bound = unname(bestX),
              pvalue = bestPvalue,
              iters = iter.count,
-             tol = tol,
              optimal = status))
 }
 

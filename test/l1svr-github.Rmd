@@ -62,6 +62,19 @@ A very clear installation guide for Gurobi can be found [here](https://cran.r-pr
 * Show the loss function to explain `epsilon`
 * Explain the penalty term `lambda`
 
+![Median regression loss](images/qr-loss.png)
+
+![l1-SVR loss](images/svr-loss.png)
+
+```{r, echo = FALSE, out.width = '45%', fig.show = 'hold', fig.align = 'center'}
+knitr::include_graphics(c("images/qr-loss.png","images/svr-loss.png"))
+```
+
+<!-- ```{r, echo=FALSE,out.width="49%",  -->
+<!-- out.height="20%",fig.cap="caption",fig.show='hold',fig.align='center'} -->
+<!-- knitr::include_graphics(c("images/qr-loss.png","images/svr-loss.png")) -->
+<!-- ``` -->
+
 ## Usage Demonstration
 
 ```{r, load-package, include = FALSE}
@@ -129,13 +142,15 @@ summary(fit2)
 ### Constructing confidence intervals
 
 The `l1svr` function is also able to construct confidence intervals by inverting the test procedure.
-This requires the function to iterate over a sequence of conjectured coefficients and perform the SVR regression rankscore test for each conjectured coefficient value.
-The end points of the confidence interval correspond to coefficients whose p-values fall within some tolerance of the size of the test.
+This entails the function implementing the l1-SVR regression rankscore test under a sequence of null hypotheses for each coefficient estimate.
+The end points of the confidence interval correspond to the null hypotheses under which the p-value of the test statistic is equal to the size of the test, up to some tolerance.
 This is a compuationally intensive procedure and is disabled by default.
 
 To enable the estimation of confidence intervals, set `confidence = TRUE`.
-The confidence level may be set using the parameter `confidence.level`, which in turn determines the size of the test to be `1 - confidence.level`.
-The maximum number of iterations performed may be set using `confidence.iter`.
+The confidence level may be set using the parameter `confidence.level`.
+The iterative procedure will terminate when the difference between the p-value of the endpoints of the confidence interval and the size of the test, `1 - confidence.level`, is within the level of tolerance.
+The level of tolerance is set to be `2.5e-3` by default, and can be adjusted using the argument `confidence.tol`.
+The maximum number of iterations performed may also be set using `confidence.iter`.
 In the example below, the confidence intervals are constructed assuming that the errors are homoskedastic.
 
 ```{r, ci-demo}
@@ -149,19 +164,18 @@ fit3 <- l1svr(formula = y ~ 1 + x1 + x2,
 summary(fit3)
 ```
 
-Additional details on the confidence interval estimates are returned in the entry `$ci` of the output.
+In the example above, the user is informed that the estimation of some of the confidence intervals have been terminated before the p-value of the test under the endpoints are within the tolerance of the size of the test, since the iteration limit was reached.
+The estimated confidence interval may therefore not reflect the confidence level set by the user.
+The actual p-values associated with the end points of each confidence interval is returned in the entry `$ci` of the output, along with additional details on the iterative procedure.
 
 ```{r, full-ci-output}
 fit3$ci
 ```
 
-The iterative procedure terminates when it finds lower and upper bounds of the confidence interval whose p-values differ by less than `confidence.tol` from the size of the test.
-However, there are two cases where the confidence interval estimation procedure will be terminated before this takes place.
-The first case is simply that the iteration limit has been reached, and can be avoided by increasing `confidence.iter`.
-The second case is that the changes in the estimated bounds across successive iterations have become sufficiently small.
+Another reason that the procedure for estimating the confidence intervals may terminate prematurely is that the estimated endpoints across successive iterations have become sufficiently small.
 This implies that the LP solver is unable to perform the test at the level of precision requried for the p-value of the bound to fall within `confidence.tol` of the size of the test.
 The user can try to avoid this by reducing `confidence.same`, which sets the tolerance level determining whether two bounds from successive iterations of the procedure are sufficently close.
-
+However, since the limitation pertains to the LP solver, there is no guarantee this will improve the estimate of the confidence intervals.
 
 If desired, the user may turn off the inference procedure by setting `inference = FALSE`.
 
@@ -188,7 +202,16 @@ The entries will be non-zero for observations with residuals equal to `abs(epsil
 The entries in the vector `$dualNegative` adhere to a similar pattern.
 That is, the entries corresponding to observations with residuals less than `-abs(epsilon)` are equal to `-1`; the entries corresponding to observations with negative residuals greater than `-abs(epsilon)` are equal to `0`; and the entries with residuals equal to `-abs(epsilon)` are non-zero.
 
-The sum of `$dualPositive` and `$dualNegative` is thus informative of whether an observation lies outside the SVR bandwidth interval `[-epsilon, epsilon]` (the sum being equal to `-1`), within the interval (the sum being `0`), or on the boundary (the sum lying between `-1` and `0`).
+The difference between `$dualNegative` and `$dualPositive` is thus a monotonic transformation of the residuals from the l1-SVR regression. 
+If the difference is negative, then the corresponding observation lies outside the SVR bandwidth interval `[-epsilon, epsilon]` and has a negative residual.
+If the difference is positive, then the corresponding observation lies outside the SVR bandwidth but has a positive residual.
+If the difference is 0, then the corresponding observation is in the interior of the bandwidth.
+Finally, in all other cases, the observation is on the boundary of the bandwidth.
+This is illustrated in the figure below.
+
+```{r, echo = FALSE, fig.show = 'hold', fig.align = 'center'}
+knitr::include_graphics("images/cs.png")
+```
 
 ## Help, Feature Requests and Bug Reports
 
