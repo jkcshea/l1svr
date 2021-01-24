@@ -37,12 +37,28 @@ res1 <- l1svr(formula = y ~ 1 +  x1 + x2, data = simdata,
 res1
 summary(res1)
 
+
+source('svr-functions.R')
+res1 <- l1svr(formula = y ~ 1 +  x1 + x2, data = simdata,
+              epsilon = tmpEpsilon, lambda = tmpLambda, inference = FALSE,
+              solver = 'lpsolveapi', h = 2, kappa = 1)
+
 ## Homoskedastic inference
 source('svr-functions.R')
 res2 <- l1svr(formula = y ~ 1 +  x1 + x2, data = simdata,
               epsilon = tmpEpsilon, lambda = tmpLambda, inference = TRUE,
               solver = 'gurobi')
 summary(res2)
+
+
+source('svr-functions.R')
+res2 <- l1svr(formula = y ~ 1 +  x1 + x2, data = simdata,
+              epsilon = tmpEpsilon, lambda = tmpLambda, inference = FALSE,
+              solver = 'gurobi',  confidence.level = 0.95, confidence.iter = 5,
+              h = 2, kappa = 1.75)
+summary(res2)
+res2$ci
+
 
 resid <- y - x %*% res2$coef
 dualDiff <- res2$dualNegative - res2$dualPositive

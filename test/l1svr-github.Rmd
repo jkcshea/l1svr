@@ -65,19 +65,19 @@ A very clear installation guide for Gurobi can be found [here](https://cran.r-pr
     actively developed.
 -->
 
-## Background
+<!-- ## Background -->
 
-Support vector regression with l1-norm regularization extends the support vector machine classification method to the regression problem, and is designed to reproduce the good out-of-sample performance of SVM classification in the regression setting.
+<!-- Support vector regression with l1-norm regularization extends the support vector machine classification method to the regression problem, and is designed to reproduce the good out-of-sample performance of SVM classification in the regression setting. -->
 
-In support vector regressions, the parameters of a linear regression model are estimated by minimizing a loss function that linearly penalizes the errors exceeding a threshold `epsilon`.
-The l1-norm regularization includes an additional penalty equal to the l1-norm of the coefficient estimates.
-The extent of the regularization is controlled by the tuning parameter `lambda`, which scales the penalty on the coefficient estimates.
+<!-- In support vector regressions, the parameters of a linear regression model are estimated by minimizing a loss function that linearly penalizes the errors exceeding a threshold `epsilon`. -->
+<!-- The l1-norm regularization includes an additional penalty equal to the l1-norm of the coefficient estimates. -->
+<!-- The extent of the regularization is controlled by the tuning parameter `lambda`, which scales the penalty on the coefficient estimates. -->
 
-As depicted below, the loss functions for median regression and support vector regression are similar, which suggests a close analogy between the method for inference.
+<!-- As depicted below, the loss functions for median regression and support vector regression are similar, which suggests a close analogy between the method for inference. -->
 
-```{r, echo = FALSE, out.width = '50%', fig.show = 'hold', fig.align = 'default'}
-knitr::include_graphics(c("images/qr-loss.png","images/svr-loss.png"))
-```
+<!-- ```{r, echo = FALSE, out.width = '50%', fig.show = 'hold', fig.align = 'default'} -->
+<!-- knitr::include_graphics(c("images/qr-loss.png","images/svr-loss.png")) -->
+<!-- ``` -->
 
 
 ## Usage Demonstration
@@ -114,7 +114,16 @@ knitr::kable(head(simdata))
 
 ### Basic estimation and inference
 
-The regression and inference may be performed by passing a data set, a regression equation, a bandwidth `epsilon`, and a penalty `lambda` to the function `l1svr`.
+In support vector regressions, the parameters of a linear regression model are estimated by minimizing a loss function that linearly penalizes the errors exceeding a threshold `epsilon`, as depicted in the figure below.
+
+```{r, echo = FALSE, out.width = '50%', fig.show = 'hold', fig.align = 'center'}
+knitr::include_graphics("images/svr-loss.png")
+```
+
+The l1-norm regularization includes an additional penalty proportional to the l1-norm of the coefficient estimates.
+The extent of the regularization is controlled by the tuning parameter `lambda`, which scales the penalty on the coefficient estimates.
+
+To estimate a linear regression model using the **l1svr** package, the user must pass a data set, a regression equation, a bandwidth `epsilon`, and a tuning parameter `lambda` to the function `l1svr`.
 The user may also choose which solver to use by setting the `solver` argument to `'gurobi'`, `'cplexapi'`, or `'lpsolveapi'`. 
 By default, `solver = 'gurobi'`.
 
@@ -129,11 +138,13 @@ summary(fit1)
 
 The coefficient estimates are stored in the entry `$coefficients` of the output, and the p-values are stored in the entry `$pvalues`.
 
-By default, statistical inference is performed and the errors are assumed to be homoskedastic.
-Inference for heteroskedastic errors may be performed by setting `heteroskedastic = TRUE`.
-This requires an estimate of the density of the errors, which is obtained using the procedure described in @powell1991estimation.
-This requires the user to pass two postive scalar tuning parameters, `h` and `kappa`.
-The bandwidth is increasing in both `h` and `kappa`, with the parameter `h` determining the quantiles of a standard normal distribution used to define the bandwidth, and the parameter `kappa` directly scaling the bandwidth.
+By default, statistical inference is performed assuming that the errors are homoskedastic.
+Inference under heteroskedasticity is also possible but requires the density of the errors to be estimated.
+To enable this feature, the user must provide the additional tuning parameters needed for density estimation.
+The **l1svr** package estimates the density of the errors using the procedure described in @powell1991estimation, which involves two postive scalar tuning parameters, `h` and `kappa`.
+They determine the bandwidth used for density estimation, and the bandwidth is increasing in both parameters. 
+The parameter `h` determines the quantiles of a standard normal distribution used to define the bandwidth, and the parameter `kappa` directly scales the bandwidth.
+Inference under heteroskedasticity will not be performed unless both `h` and `kappa` are passed.
 We refer the reader to the Online Appendix of @bai2021inference for additional details on how inference is performed under heteroskedastic errors.
 
 ```{r, hetero-demo}
@@ -141,7 +152,6 @@ fit2 <- l1svr(formula = y ~ 1 + x1 + x2,
               data = simdata,
               epsilon = 7,
               lambda = 20,
-              heteroskedastic = TRUE,
               h = 2,
               kappa = 1.75)
 summary(fit2)
@@ -151,15 +161,15 @@ If desired, the user may turn off the inference procedure by setting `inference 
 
 ### Constructing confidence intervals
 
-The `l1svr` function is also able to construct confidence intervals by inverting the test procedure.
+The `l1svr` function is able to construct confidence intervals by inverting the test procedure.
 This entails the function implementing the l1-SVR regression rankscore test under a sequence of null hypotheses for each coefficient estimate.
 The end points of the confidence interval correspond to the null hypotheses under which the p-value of the test statistic is equal to the size of the test, up to some tolerance.
 This is a compuationally intensive procedure and is disabled by default.
 
-To enable the estimation of confidence intervals, set `confidence = TRUE`.
-The confidence level may be set using the parameter `confidence.level`.
-The iterative procedure will terminate when the difference between the p-value of the endpoints of the confidence interval and the size of the test, `1 - confidence.level`, is within the level of tolerance.
-By default, the tolerance is equal to `2.5e-3`, but can be adjusted using the argument `confidence.tol`.
+To enable the estimation of confidence intervals, set `confidence.level` to a value between 0 and 1.
+This argument also determines the confidence level of the intervals.
+The iterative procedure will terminate when the difference between the p-value of the endpoints of the confidence interval and the size of the test (`1 - confidence.level`) is within the level of tolerance.
+By default, the tolerance is equal to `1e-3`, but can be adjusted using the argument `confidence.tol`.
 The maximum number of iterations performed may also be set using `confidence.iter`.
 In the example below, the confidence intervals are constructed assuming that the errors are homoskedastic.
 
@@ -168,13 +178,13 @@ fit3 <- l1svr(formula = y ~ 1 + x1 + x2,
               data = simdata,
               epsilon = 7,
               lambda = 20,
-              confidence = TRUE,
               confidence.level = 0.95,
-              confidence.iter = 20)
+              confidence.iter = 20,
+              confidence.tol = 2e-3)
 summary(fit3)
 ```
 
-In the example above, the user is informed that the estimation of some of the confidence intervals have been terminated before the p-value at the endpoints are within tolerance to the size of the test since the iteration limit was reached.
+In the example above, the user is informed that the estimation of some of the confidence intervals has been terminated before the p-value at the endpoints are within tolerance to the size of the test since the iteration limit was reached.
 The estimated confidence interval may therefore not reflect the confidence level set by the user.
 The actual p-values at the end points of each confidence interval is returned in the entry `$ci` of the output, along with additional details on the iterative procedure.
 
@@ -185,7 +195,8 @@ fit3$ci
 Another reason that the estimation of confidence intervals may terminate prematurely is that the estimated endpoints across successive iterations have become sufficiently small.
 This implies that the solver is unable to perform the test at the level of precision requried for the p-value of the bound to fall within tolerance to the size of the test.
 The user can try to avoid this by reducing `confidence.same`, which sets the tolerance level determining whether two bounds from successive iterations of the procedure are sufficently close.
-However, since the limitation pertains to the solver, there is no guarantee this will improve the estimate of the confidence intervals.
+By default, this parameter is equal to `1e-06`.
+However, since the limitation pertains to the solver, there is no guarantee that reducing this parameter will improve the estimate of the confidence intervals.
 
 <!-- ## Additional output -->
 

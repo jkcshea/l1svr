@@ -14,14 +14,13 @@
 #'     \code{'lpsolveapi'}. The name of the solver should be provided
 #'     with quotation marks.
 l1svr <- function(formula, data, epsilon, lambda,
+                  h = NULL, kappa = NULL,
                   solver = 'gurobi',
                   inference = TRUE,
-                  confidence = FALSE, confidence.level = 0.95,
+                  confidence.level = NULL,
                   confidence.iter = 25,
-                  confidence.tol = 2.5e-3,
-                  confidence.same = 1e-06,
-                  heteroskedastic = FALSE,
-                  h = NULL, kappa = NULL) {
+                  confidence.tol = 1e-3,
+                  confidence.same = 1e-06) {
     origCall <- match.call()
     ## Check that the solver is valid
     solver <- tolower(solver)
@@ -73,44 +72,69 @@ l1svr <- function(formula, data, epsilon, lambda,
     }
     ## Check whether there is intercept
     tmpInt <- as.logical(attr(tmpTerms, 'intercept'))
-    ## Check that tuning parameters are provided if heteroskedasticity
-    ## is declared.
+    ## Determine whether confidence intervals should be constructed
+    if (!is.null(confidence.level)) {
+        confidence <- TRUE
+        if (!is.numeric(confidence.level)) {
+            stop(gsub('\\s+', ' ',
+                      "The argument 'confidence.level' must be numeric and
+                       lie between 0 and 1."),
+                 call. = FALSE)
+        }
+        if (confidence.level <= 0 | confidence.level >= 1) {
+            stop(gsub('\\s+', ' ',
+                      "The argument 'confidence.level' must
+                       lie between 0 and 1."),
+                 call. = FALSE)
+        }
+    } else {
+        confidence <- FALSE
+    }
+    if (!confidence) {
+        if (hasArg(confidence.iter) |
+            hasArg(confidence.tol) |
+            hasArg(confidence.same)) {
+            warning(gsub('\\s+', ' ',
+                         "To enable estimation of confidence intervals,
+                          set 'confidence.level' to a value between 0 and 1.
+                          Otherwise, the arguments 'confidence.iter',
+                          'confidence.tol', and 'confidence.same' are
+                          ignored."),
+                    call. = FALSE)
+        }
+    }
+    ## Determine heteroskedasticity. Heteroskedasticity is assumed as
+    ## long as the user inputs an argument into either h or kappa.
+    if (!is.null(h) | !is.null(kappa)) {
+        heteroskedastic <- TRUE
+    } else {
+        heteroskedastic <- FALSE
+    }
     if (heteroskedastic) {
         if (is.null(h) | is.null(kappa)) {
             stop(gsub('\\s+', ' ',
-                      "If 'heteroskedastic = TRUE', then arguments 'h'
-                       and 'kappa' must be provided."),
+                      "If the errors are homoskedastic, then both arguments
+                       'h' and 'kappa' must not be provided.
+                       If the errors are heteroskedastic, then
+                       both arguments 'h' and 'kappa' must be provided."),
                  call. = FALSE)
         }
-        if (!is.numeric(h) | !(is.numeric(kappa) & kappa > 0)) {
+        if (!(is.numeric(h) && h > 0) | !(is.numeric(kappa) && kappa > 0)) {
             stop(gsub('\\s+', ' ',
                       "Arguments 'h' and 'kappa'
                        must be strictly positive scalars."),
                  call. = FALSE)
         }
-    } else {
-        if (!is.null(h) | !is.null(kappa)) {
-            warning(gsub('\\s+', ' ',
-                         "Arguments 'h' and 'kappa' are only used when
-                          'heteroskedastic = TRUE'."),
-                    call. = FALSE)
-        }
     }
     if (!inference && (heteroskedastic == TRUE |
-                       !is.null(h) | !is.null(kappa))) {
+                       confidence == TRUE)) {
         warning(gsub('\\s+', ' ',
-                     "Arguments 'heteroskedastic', 'h', and 'kappa' are
-                      only used when 'inference = TRUE'."),
+                     "Arguments 'h', 'kappa', and those beginning with
+                      'confidence.' are all ignored if
+                      'inference = FALSE'."),
                 call. = FALSE)
-    }
-    if (!confidence && (hasArg(confidence.level) |
-                        hasArg(confidence.iter) |
-                        hasArg(confidence.tol) |
-                        hasArg(confidence.same))) {
-        warning(gsub('\\s+', ' ',
-                     "All arguments beginning with 'confidence.' are ignored
-                      unless 'confidence = TRUE'."),
-                call. = FALSE)
+        heteroskedastic <- FALSE
+        confidence <- FALSE
     }
     ## Construct design matrix
     tmpMf <- model.frame(formula = formula, data = data)
@@ -241,23 +265,36 @@ l1svr <- function(formula, data, epsilon, lambda,
             cat('\n')
             confidenceMatLb <- data.frame(confidenceMatLb)
             confidenceMatUb <- data.frame(confidenceMatUb)
+            confidenceMatLb$status <- factor(confidenceMatLb$status,
+                                              levels = c(1, 2, 3),
+                                              labels = c('Optimal',
+                                                         'Iter. limit',
+                                                         'Prec. limit'))
+            confidenceMatUb$status <- factor(confidenceMatUb$status,
+                                              levels = c(1, 2, 3),
+                                              labels = c('Optimal',
+                                                         'Iter. limit',
+                                                         'Prec. limit'))
             rownames(confidenceMatLb) <- colnames(fullX)
             rownames(confidenceMatUb) <- colnames(fullX)
             coefEstimates$ci <- list(lower = confidenceMatLb,
                                      upper = confidenceMatUb,
                                      level = confidence.level,
-                                     tol = confidence.tol)
-            if (2 %in% confidenceMatLb$optimal |
-                2 %in% confidenceMatUb$optimal) {
+                                     tol = confidence.tol,
+                                     heteroskedastic = heteroskedastic)
+            if ('Iter. limit' %in% confidenceMatLb$status |
+                'Iter. limit' %in% confidenceMatUb$status) {
                 warning(gsub('\\s+', ' ',
-                             'Calculation of confidence intervals terminated,
+                             'Estimation for some confidence intervals was
+                              terminated,
                               iteration maximum reached.'),
                         call. = FALSE)
             }
-            if (3 %in% confidenceMatLb$optimal |
-                3 %in% confidenceMatUb$optimal) {
+            if ('Prec. limit' %in% confidenceMatLb$status |
+                'Prec. limit' %in% confidenceMatUb$status) {
                 warning(gsub('\\s+', ' ',
-                             'Calculation of confidence intervals terminated,
+                             'Estimation for some confidence intervals was
+                              terminated,
                               precision limit reached.'),
                         call. = FALSE)
             }
@@ -466,7 +503,7 @@ svmInference <- function(Xr, Zr, Y, U, epsilon, lambda = 0,
     }
     if (epsilon == 0) {
         if (!heteroskedastic) {
-            rho <- 0.5
+            rho <- 1
         } else {
             if (intercept)  rqFit <- quantreg::rq(Yr ~ 1 + Xr)
             if (!intercept) rqFit <- quantreg::rq(Yr ~ 0 + Xr)
@@ -572,11 +609,11 @@ summary.l1svr <- function(object, ...) {
         ciTable <- data.frame(cbind(object$ci$lower$bound,
                                     object$ci$upper$bound))
         statusLower <- rep('  ', nrow(object$ci$lower))
-        statusLower[which(object$ci$lower$optimal == 2)] <- ' *'
-        statusLower[which(object$ci$lower$optimal == 3)] <- '**'
+        statusLower[which(object$ci$lower$status == 'Iter. limit')] <- ' *'
+        statusLower[which(object$ci$lower$status == 'Prec. limit')] <- '**'
         statusUpper <- rep('  ', nrow(object$ci$upper))
-        statusUpper[which(object$ci$upper$optimal == 2)] <- '* '
-        statusUpper[which(object$ci$upper$optimal == 3)] <- '**'
+        statusUpper[which(object$ci$upper$status == 'Iter. limit')] <- '* '
+        statusUpper[which(object$ci$upper$status == 'Prec. limit')] <- '**'
         ciTable <- cbind(statusLower, ciTable, statusUpper)
         colnames(ciTable) <- c('', 'Lower', 'Upper', '')
         rownames(ciTable) <- rownames(object$ci$lower)
@@ -697,7 +734,7 @@ gridSearch <- function(FUN, init = 0, target, increment = 2,
     return(c(bound = unname(bestX),
              pvalue = bestPvalue,
              iters = iter.count,
-             optimal = status))
+             status = status))
 }
 
 #' Alternative function for determining confidence intervals
