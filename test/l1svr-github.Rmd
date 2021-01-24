@@ -42,12 +42,22 @@ devtools::install_github("jkcshea/l1svr")
 ```
 
 A package for solving linear programs is required.
-Currently, the package only suports Gurobi.
-This requires a Gurobi software license, which Gurobi Optimization offers at no cost to academic researchers.
-Gurobi and its R package **gurobi** can be optained from [Gurobi Optimization](http://www.gurobi.com/index).
+The user can choose from three options.
+
+1. Gurobi and the Gurobi R package **gurobi**, which can be obtained from [Gurobi Optimization](http://www.gurobi.com/index).
+   This option requires a Gurobi software license, which Gurobi Optimization offers at no cost to academic researchers.
+   
+2. CPLEX and the package **cplexAPI**,  which is available on CRAN.
+   CPLEX can be obtained from [IBM](https://www.ibm.com/analytics/cplex-optimizer).
+   This option requires a software license, which IBM offers at no cost to academic researchers.
+   
+3. The **lpSolveAPI** package, which is free and open-source, and available from CRAN.
+   Note that **lpSolveAPI** is a wrapper for [lp_solve](http://lpsolve.sourceforge.net/5.5/), which is no longer actively developed.
+
+We have provided the option to use **lpSolveAPI** because it appears to be the only interface for solving linear programs that can be installed solely through `install.packages`.
+However, we _strongly_ recommend using Gurobi or CPLEX, since these are actively developed, much more stable, and typically an order of magnitude faster than **lpSolveAPI**.
 A very clear installation guide for Gurobi can be found [here](https://cran.r-project.org/package=prioritizr/vignettes/gurobi_installation.html)
 
-**[I will incorporate `lp_solve` as a free alternative]**
 
 <!--
     i. The **lpSolveAPI** package, which is free and open-source, and available from CRAN.
@@ -57,23 +67,18 @@ A very clear installation guide for Gurobi can be found [here](https://cran.r-pr
 
 ## Background
 
-**[To be written]**
+Support vector regression with l1-norm regularization extends the support vector machine classification method to the regression problem, and is designed to reproduce the good out-of-sample performance of SVM classification in the regression setting.
 
-* Show the loss function to explain `epsilon`
-* Explain the penalty term `lambda`
+In support vector regressions, the parameters of a linear regression model are estimated by minimizing a loss function that linearly penalizes the errors exceeding a threshold `epsilon`.
+The l1-norm regularization includes an additional penalty equal to the l1-norm of the coefficient estimates.
+The extent of the regularization is controlled by the tuning parameter `lambda`, which scales the penalty on the coefficient estimates.
 
-![Median regression loss](images/qr-loss.png)
+As depicted below, the loss functions for median regression and support vector regression are similar, which suggests a close analogy between the method for inference.
 
-![l1-SVR loss](images/svr-loss.png)
-
-```{r, echo = FALSE, out.width = '45%', fig.show = 'hold', fig.align = 'center'}
+```{r, echo = FALSE, out.width = '50%', fig.show = 'hold', fig.align = 'default'}
 knitr::include_graphics(c("images/qr-loss.png","images/svr-loss.png"))
 ```
 
-<!-- ```{r, echo=FALSE,out.width="49%",  -->
-<!-- out.height="20%",fig.cap="caption",fig.show='hold',fig.align='center'} -->
-<!-- knitr::include_graphics(c("images/qr-loss.png","images/svr-loss.png")) -->
-<!-- ``` -->
 
 ## Usage Demonstration
 
@@ -100,22 +105,25 @@ colnames(simdata) <- c('y', 'x1', 'x2')
 ```
 
 The package includes the data set `simdata`, which we will use to demonstrate how the package may be used.
+The data generating process is `y ~ -2 + x1 + 0.5 * x2 + u`, where `u` is an error term unobserved to the researcher.
 
 ```{r, show-data}
 knitr::kable(head(simdata))
 ```
 
-The data generating process is `y ~ -2 + x1 + 0.5 * x2 + v`, where `v` is an error term unobserved to the researcher.
 
 ### Basic estimation and inference
 
 The regression and inference may be performed by passing a data set, a regression equation, a bandwidth `epsilon`, and a penalty `lambda` to the function `l1svr`.
+The user may also choose which solver to use by setting the `solver` argument to `'gurobi'`, `'cplexapi'`, or `'lpsolveapi'`. 
+By default, `solver = 'gurobi'`.
 
 ```{r, basic-demo}
 fit1 <- l1svr(formula = y ~ 1 + x1 + x2,
               data = simdata,
               epsilon = 7,
-              lambda = 20)
+              lambda = 20,
+              solver = 'gurobi')
 summary(fit1)
 ```
 
@@ -139,6 +147,8 @@ fit2 <- l1svr(formula = y ~ 1 + x1 + x2,
 summary(fit2)
 ```
 
+If desired, the user may turn off the inference procedure by setting `inference = FALSE`.
+
 ### Constructing confidence intervals
 
 The `l1svr` function is also able to construct confidence intervals by inverting the test procedure.
@@ -149,7 +159,7 @@ This is a compuationally intensive procedure and is disabled by default.
 To enable the estimation of confidence intervals, set `confidence = TRUE`.
 The confidence level may be set using the parameter `confidence.level`.
 The iterative procedure will terminate when the difference between the p-value of the endpoints of the confidence interval and the size of the test, `1 - confidence.level`, is within the level of tolerance.
-The level of tolerance is set to be `2.5e-3` by default, and can be adjusted using the argument `confidence.tol`.
+By default, the tolerance is equal to `2.5e-3`, but can be adjusted using the argument `confidence.tol`.
 The maximum number of iterations performed may also be set using `confidence.iter`.
 In the example below, the confidence intervals are constructed assuming that the errors are homoskedastic.
 
@@ -164,54 +174,61 @@ fit3 <- l1svr(formula = y ~ 1 + x1 + x2,
 summary(fit3)
 ```
 
-In the example above, the user is informed that the estimation of some of the confidence intervals have been terminated before the p-value of the test under the endpoints are within the tolerance of the size of the test, since the iteration limit was reached.
+In the example above, the user is informed that the estimation of some of the confidence intervals have been terminated before the p-value at the endpoints are within tolerance to the size of the test since the iteration limit was reached.
 The estimated confidence interval may therefore not reflect the confidence level set by the user.
-The actual p-values associated with the end points of each confidence interval is returned in the entry `$ci` of the output, along with additional details on the iterative procedure.
+The actual p-values at the end points of each confidence interval is returned in the entry `$ci` of the output, along with additional details on the iterative procedure.
 
 ```{r, full-ci-output}
 fit3$ci
 ```
 
-Another reason that the procedure for estimating the confidence intervals may terminate prematurely is that the estimated endpoints across successive iterations have become sufficiently small.
-This implies that the LP solver is unable to perform the test at the level of precision requried for the p-value of the bound to fall within `confidence.tol` of the size of the test.
+Another reason that the estimation of confidence intervals may terminate prematurely is that the estimated endpoints across successive iterations have become sufficiently small.
+This implies that the solver is unable to perform the test at the level of precision requried for the p-value of the bound to fall within tolerance to the size of the test.
 The user can try to avoid this by reducing `confidence.same`, which sets the tolerance level determining whether two bounds from successive iterations of the procedure are sufficently close.
-However, since the limitation pertains to the LP solver, there is no guarantee this will improve the estimate of the confidence intervals.
+However, since the limitation pertains to the solver, there is no guarantee this will improve the estimate of the confidence intervals.
 
-If desired, the user may turn off the inference procedure by setting `inference = FALSE`.
+<!-- ## Additional output -->
 
-## Additional output
+<!-- In addition to returning the coefficient estimates and p-values, the `l1svr` function returns other quantities that may be of interest to the usuer. -->
 
-In addition to returning the coefficient estimates and p-values, the `l1svr` function returns other quantities that may be of interest to the usuer.
+<!-- 1. The positive and negative residuals of the l1-SVR problem are returned in the entries `$primalPositive` and `$primalNegative` of the output, respectively. -->
 
-1. The positive and negative residuals of the l1-SVR problem are returned in the entries `$primalPositive` and `$primalNegative` of the output, respectively.
+<!-- 1. The solutions to the dual problem are returned in the entries `$dualPositive` and `$dualNegative`. -->
+<!-- These two vectors are used to conduct inference using a rankscore test. -->
 
-1. The solutions to the dual problem are returned in the entries `$dualPositive` and `$dualNegative`.
-These two vectors are used to conduct inference using a rankscore test.
+<!-- 1. The number of observations used in estimation is returned in the entry `$N` of the output. -->
 
-1. The number of observations used in estimation is returned in the entry `$N` of the output.
+<!-- The lengths of `$primalPositive`, `$primalNegative`, `$dualPositive`, and `$dualNegative` are all equal to `$N`. -->
+<!-- Each entry of each vector corresponds to an observation used for estimation. -->
+<!-- Entries of `$primalPositive` are equal to the residual for observations with strictly positive residuals, and are equal to `0` otherwise. -->
+<!-- Likewise, entries of `$primalNegative` are equal to the negative of the residual (i.e. a positive number) for observations with strictly negative residuals, and are equal to `0` otherwise. -->
 
-The lengths of `$primalPositive`, `$primalNegative`, `$dualPositive`, and `$dualNegative` are all equal to `$N`.
-Each entry of each vector corresponds to an observation used for estimation.
-Entries of `$primalPositive` are equal to the residual for observations with strictly positive residuals, and are equal to `0` otherwise.
-Likewise, entries of `$primalNegative` are equal to the negative of the residual (i.e. a positive number) for observations with strictly negative residuals, and are equal to `0` otherwise.
+<!-- The entries in the vector `$dualPositive` are equal to `-1` for observations with residuals greater than the SVR threshold `abs(epsilon)`. -->
+<!-- The entries are equal to `0` for observations with residuals less than `abs(epsilon)`. -->
+<!-- The entries will be non-zero for observations with residuals equal to `abs(epsilon)`. -->
 
-The entries in the vector `$dualPositive` are equal to `-1` for observations with residuals greater than the SVR threshold `abs(epsilon)`.
-The entries are equal to `0` for observations with residuals less than `abs(epsilon)`.
-The entries will be non-zero for observations with residuals equal to `abs(epsilon)`.
+<!-- The entries in the vector `$dualNegative` adhere to a similar pattern. -->
+<!-- That is, the entries corresponding to observations with residuals less than `-abs(epsilon)` are equal to `-1`; the entries corresponding to observations with negative residuals greater than `-abs(epsilon)` are equal to `0`; and the entries with residuals equal to `-abs(epsilon)` are non-zero. -->
 
-The entries in the vector `$dualNegative` adhere to a similar pattern.
-That is, the entries corresponding to observations with residuals less than `-abs(epsilon)` are equal to `-1`; the entries corresponding to observations with negative residuals greater than `-abs(epsilon)` are equal to `0`; and the entries with residuals equal to `-abs(epsilon)` are non-zero.
+<!-- The difference between `$dualNegative` and `$dualPositive` is thus a monotonic transformation of the residuals from the l1-SVR regression, as shown in the figure below. -->
 
-The difference between `$dualNegative` and `$dualPositive` is thus a monotonic transformation of the residuals from the l1-SVR regression. 
-If the difference is negative, then the corresponding observation lies outside the SVR bandwidth interval `[-epsilon, epsilon]` and has a negative residual.
-If the difference is positive, then the corresponding observation lies outside the SVR bandwidth but has a positive residual.
-If the difference is 0, then the corresponding observation is in the interior of the bandwidth.
-Finally, in all other cases, the observation is on the boundary of the bandwidth.
-This is illustrated in the figure below.
+<!-- ```{r, alpha-demo, fig.align='center'} -->
+<!-- # Plot the difference between the dual variables -->
+<!-- residuals <- simdata$y - as.matrix(cbind(1, simdata[, -1])) %*% fit3$coef -->
+<!-- alphaDiffs <- fit3$dualNegative - fit3$dualPositive -->
+<!-- plot(x = residuals, y = alphaDiffs,  -->
+<!--      xlab = 'Residuals', ylab = 'Difference') -->
+<!-- ``` -->
 
-```{r, echo = FALSE, fig.show = 'hold', fig.align = 'center'}
-knitr::include_graphics("images/cs.png")
-```
+<!-- If the difference is negative, then the corresponding observation lies outside the SVR bandwidth interval `[-epsilon, epsilon]` and has a negative residual. -->
+<!-- If the difference is positive, then the corresponding observation lies outside the SVR bandwidth but has a positive residual. -->
+<!-- If the difference is 0, then the corresponding observation is in the interior of the bandwidth. -->
+<!-- Finally, in all other cases, the observation is on the boundary of the bandwidth and define the support vectors. -->
+<!-- This is illustrated in the figure below. -->
+
+<!-- ```{r, echo = FALSE, fig.show = 'hold', fig.align = 'center'} -->
+<!-- knitr::include_graphics("images/cs.png") -->
+<!-- ``` -->
 
 ## Help, Feature Requests and Bug Reports
 
