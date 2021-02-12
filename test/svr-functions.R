@@ -1,18 +1,52 @@
-#' Function to perform SVM regression under l1 regularization
+#' Support vector regression and inference under l1 regularization
 #'
-#' @param formula Regression formula.
-#' @param Y (vector) Dependent variable.
-#' @param X (2d array) Independent variables, excluding column of
-#'     constants for the intercept.
-#' @param epsilon (real) Parameter defining soft-thresholding rule.
-#' @param lambda (real) Tuning parameter to scale l1 penalty.
-#' @param intercept (boolean) Set to \code{TRUE} if an intercept
-#'     should be included in the regression.
-#' @param solver character, name of the linear programming package in
+#' This function performs the support vector regression under l1
+#' regularization. A regression rankscore test is performed to
+#' conduct inference and construct confidence intervals.
+#'
+#' @param formula Regression formula, e.g., \code{y ~ x1 + x2}.
+#' @param data Data frame.
+#' @param epsilon Scalar defining soft-thresholding rule.
+#' @param lambda Scalar parameter to scale l1 penalty.
+#' @param h Scalar determining the quantiles of a standard normal
+#'     distribution used to define the bandwidth for nonparametric
+#'     density estimation. If no argument is provided, then errors are
+#'     assumed to be homoskedastic, and error density estimation is
+#'     not performed. See
+#'     \href{https://econpapers.repec.org/paper/attwimass/8818.htm}{Powell
+#'     (1991)} and
+#'     \href{https://yuehaob.github.io/assets/svml1.pdf}{Bai
+#'     et. al. (2021)} for details.
+#' @param kappa Scalar that directly scales the bandwidth for
+#'     nonparametric density estimation. If no argument is provided,
+#'     then errors are assumed to be homoskedastic, and error density
+#'     estimation is not performed.  See
+#'     \href{https://econpapers.repec.org/paper/attwimass/8818.htm}{Powell
+#'     (1991)} and
+#'     \href{https://yuehaob.github.io/assets/svml1.pdf}{Bai
+#'     et. al. (2021)} for details.
+#' @param solver Character, name of the linear programming package in
 #'     R used to obtain the bounds on the treatment effect. The
 #'     function supports \code{'gurobi'}, \code{'cplexapi'},
 #'     \code{'lpsolveapi'}. The name of the solver should be provided
 #'     with quotation marks.
+#' @param inference Boolean, determines whether or not p-values and
+#'     confidence intervals will be estimated. Set to \code{TRUE} by
+#'     default.
+#' @param confidence.level Scalar between 0 and 1. Determines the
+#'     confidence level for estimating confidence intervals.
+#' @param confidence.iter Integer determining maximum number of
+#'     iterations performed when estimating the confidence interval.
+#'     Set to 25 by default.
+#' @param confidence.tol Scalar between 0 and 1. Determines the
+#'     tolerance for the confidence level when estimating the
+#'     confidence interval.
+#' @param confidence.same Scalar between 0 and 1. Sets the tolerance
+#'     for determining when the confidence interval estimate may no
+#'     longer be improved.
+#' @return A list containing the coefficient estimates from the
+#'     regression, the p-values, and the confidence intervals.
+#' @export
 l1svr <- function(formula, data, epsilon, lambda,
                   h = NULL, kappa = NULL,
                   solver = 'gurobi',
@@ -224,7 +258,8 @@ l1svr <- function(formula, data, epsilon, lambda,
                          intercept = tmpInt, Y = Y,
                          X = X, U = U, epsilon = epsilon,
                          lambda = lambda,
-                         heteroskedastic = heteroskedastic, h = h,
+                         heteroskedastic = heteroskedastic,
+                         hc = h,
                          kappa = kappa)
             cat('\n')
             for (i in 1:ncol(fullX)) {
@@ -304,23 +339,23 @@ l1svr <- function(formula, data, epsilon, lambda,
 }
 
 
-#' SVR-l1 regression function
+#' l1-SVR regression function
 #'
-#' This function carries out a SVR regression under l1 penalty.
+#' This function carries out an SVR regression under l1 penalty.
 #'
-#' @param Y (vector) Dependent variable.
-#' @param X (2d array) Independent variables, excluding column of
+#' @param Y Vector, dependent variable.
+#' @param X 2d array, independent variables, excluding column of
 #'     constants for the intercept.
-#' @param epsilon (real) Parameter defining soft-thresholding rule.
-#' @param lambda (real) Tuning parameter to scale l1 penalty.
-#' @param intercept (boolean) Set to \code{TRUE} if an intercept
+#' @param epsilon  Parameter defining soft-thresholding rule.
+#' @param lambda Parameter to scale l1 penalty.
+#' @param intercept Boolean, set to \code{TRUE} if an intercept
 #'     should be included in the regression.
 #' @param solver character, name of the linear programming package in
 #'     R used to obtain the bounds on the treatment effect. The
 #'     function supports \code{'gurobi'}, \code{'cplexapi'},
 #'     \code{'lpsolveapi'}. The name of the solver should be provided
 #'     with quotation marks.
-#' @return (list) A list including the coefficient estimates, and
+#' @return A list including the coefficient estimates, and
 #'     solutions to the primal and dual problem that can be used to
 #'     identify the support vectors and recover the coefficient
 #'     estimates.
@@ -412,7 +447,7 @@ svmRegress <- function(Y, X, epsilon, lambda, intercept = TRUE, solver) {
                            rep("<=", nrow(X)),
                            rep("<=", nrow(X)))
         if (!intercept) {
-               senseDual <- senseDual[-1]                         
+               senseDual <- senseDual[-1]
            }
         ## Pass matrices into Gurobi
         modelDual = list()
@@ -436,28 +471,45 @@ svmRegress <- function(Y, X, epsilon, lambda, intercept = TRUE, solver) {
                 dualPositive  = dualPositive))
 }
 
-#' Function to perform inference
+#' l1-SVR regression rankscore test
 #'
-#' This function performs the SVR regression and calculates the p-value.
+#' This function performs the l1-SVR regression rankscore test for a single coefficient, and returns the p-value.
 #'
 #' @param Xr Matrix of covariates, excluding the covariate of interest
-#'     for which we are conducting inference.
-#' @param Zr Vector of the covariate of interest for which we are
-#'     conducting inference.
+#'     for which inference is being conducted.
+#' @param Zr Vector of the covariate of interest for which inference
+#'     is being conducted.
 #' @param Y Vector of the outcome.
 #' @param U Vector of the residuals.
 #' @param epsilon Real scalar, bandwidth for SVR.
-#' @param lambda Real scalar, tuning parmaeter for SVR that controls
-#'     the penalty.
-#' @param intercept (boolean) Set to \code{TRUE} if an intercept
-#'     should be included in the regression.
+#' @param lambda Real scalar, parameter for SVR that scales the
+#'     penalty.
+#' @param solver Character, name of the linear programming package in
+#'     R used to obtain the bounds on the treatment effect. The
+#'     function supports \code{'gurobi'}, \code{'cplexapi'},
+#'     \code{'lpsolveapi'}. The name of the solver should be provided
+#'     with quotation marks.
+#' @param intercept Boolean, set to \code{TRUE} if an intercept should
+#'     be included in the regression.
 #' @param nullGamma Real scalar, the coefficient on \code{Zr} under
 #'     the null.
 #' @param heteroskedastic Boolean, indicate whether data has
-#'     heteroskedastic errors.
-#' @param hc Real scalar, tuning parameter for density estimation.
-#' @param kappa Real scalar, tuning parameter for density estimation.
-#' @return pvalue.
+#'     heteroskedastic errors. If set to \code{TRUE}, then density
+#'     estimation is performed when conducting inference.
+#' @param hc Scalar determing the quantiles of a standard normal
+#'     distribution used to define the bandwidth for nonparametric
+#'     density estimation. See
+#'     \href{https://econpapers.repec.org/paper/attwimass/8818.htm}{Powell
+#'     (1991)} and
+#'     \href{https://yuehaob.github.io/assets/svml1.pdf}{Bai
+#'     et. al. (2021)} for details.
+#' @param kappa Scalar that directly scales the bandwdith for
+#'     nonparametric density estimation. See
+#'     \href{https://econpapers.repec.org/paper/attwimass/8818.htm}{Powell
+#'     (1991)} and
+#'     \href{https://yuehaob.github.io/assets/svml1.pdf}{Bai
+#'     et. al. (2021)} for details.
+#' @return A p-value.
 svmInference <- function(Xr, Zr, Y, U, epsilon, lambda = 0,
                          solver = 'gurobi',
                          intercept = TRUE, nullGamma = 0,
@@ -627,12 +679,30 @@ summary.l1svr <- function(object, ...) {
     }
 }
 
+#' Function for determining confidence intervals
+#'
+#' This function performs one iteration of estimating the confidence
+#' interval. That is, it performs the l1-SVR regression rankscore test
+#' under a single null hypothesis.
+#'
+#' @param target Target, equal to the size of the test.
+#' @param gamma0 Scalar, a conjectured value of the coefficient for
+#'     the covariate of interest, i.e. the covariate for which the
+#'     confidence interval is being constructed.
+#' @param index Integer, indexes which covariate is of interest.
+#' @param intercept Boolean, indicates whether an intercept term is
+#'     included in the regression.
+#' @param Y Vector of dependent variable.
+#' @param X Matrix of covariates.
+#' @param U Vector of residuals from regressing \code{Y} on \code{X}
+#'     using l1svr.
+#' @inheritParams svmInference
 ciIter <- function(gamma0, index, intercept, Y, X, U, epsilon, lambda,
-               heteroskedastic, h, kappa) {
+               heteroskedastic, hc, kappa) {
     args <- list(nullGamma = gamma0, Y = Y, U = U,
                  epsilon = epsilon, lambda = lambda,
                  heteroskedastic = heteroskedastic,
-                 hc = h, kappa = kappa)
+                 hc = hc, kappa = kappa)
     if (intercept) {
         if (index == 1) {
             args$intercept <- FALSE
@@ -655,7 +725,26 @@ ciIter <- function(gamma0, index, intercept, Y, X, U, epsilon, lambda,
     do.call(svmInference, args)
 }
 
-
+#' Function to perform grid search
+#'
+#' Perform a grid search to find the value at which argument
+#' \code{FUN} is equal to argument \code{target}.
+#'
+#' @param FUN Scalar function of scalar argument.
+#' @param init Scalar, initial solution.
+#' @param target Scalar, target p-value.
+#' @param increment Scalar, determines the first increment of the
+#'     grid, and is refined over the iterations of the grid search.
+#' @param tol Scalar, tolerance for determining when \code{FUN}
+#'     evaluated at the solution is sufficiently close to
+#'     \code{target}. Set to \code{2.5e-3} by default.
+#' @param tol.same Scalar, tolerance for determining when solution can
+#'     no longer be improved. Set to \code{1e-06} by default.
+#' @param left Boolean, set to \code{TRUE} if solution is left of the
+#'     initial solution declared in \code{init}.
+#' @param iter.max Integer, maximum number of iterations to perform.
+#' @return Scalar, the value of the argument at which \code{FUN} is
+#'     equal to \code{target}.
 gridSearch <- function(FUN, init = 0, target, increment = 2,
                        tol = 2.5e-3, tol.same = 1e-06,
                        left = FALSE, iter.max = 25,
@@ -733,57 +822,9 @@ gridSearch <- function(FUN, init = 0, target, increment = 2,
     }
     return(c(bound = unname(bestX),
              pvalue = bestPvalue,
-             iters = iter.count,
+             iterations = iter.count,
              status = status))
 }
-
-#' Alternative function for determining confidence intervals
-#'
-#' This function should be used with the R function \code{optimize} to
-#' find the bounds of the confidence interval.
-#'
-#' @param target Target, equal to the size of the test.
-#' @param gamma0 Scalar, a conjectured value of the coefficient for
-#'     the covariate of interest, i.e. the covariate for which the
-#'     confidence interval is being constructed.
-#' @param index Integer, indexes which covariate is of interest.
-#' @param intercept Boolean, indicates whether an intercept term is
-#'     included in the regression.
-#' @param Y Vector of dependent variable.
-#' @param X Matrix of covariates.
-#' @param U Vector of residuals from regressing \code{Y} on \code{X}
-#'     using l1svr.
-#'
-#' @inheritParams ivmteEstimate
-ciIterOptim <- function(target, gamma0, index, intercept, Y, X, U,
-                        epsilon, lambda, heteroskedastic, h, kappa) {
-    args <- list(nullGamma = gamma0, Y = Y, U = U,
-                 epsilon = epsilon, lambda = lambda,
-                 heteroskedastic = heteroskedastic,
-                 hc = h, kappa = kappa)
-    if (intercept) {
-        if (index == 1) {
-            args$intercept <- FALSE
-            args$Xr <- X
-            args$Zr <- rep(1, n)
-        } else {
-            Xr <- matrix(X[, -(index - 1)], ncol = ncol(X) - 1)
-            colnames(Xr) <- colnames(X)[-(index - 1)]
-            args$intercept <- TRUE
-            args$Xr <- Xr
-            args$Zr = X[, (index - 1)]
-        }
-    } else {
-        Xr <- matrix(X[, -index], ncol = ncol(X) - 1)
-        colnames(Xr) <- colnames(X)[-index]
-        args$intercept <- FALSE
-        args$Xr <- Xr
-        args$Zr <- X[, index]
-    }
-    pvalue <- do.call(svmInference, args)
-    return(abs(pvalue - target))
-}
-
 
 #' Running Gurobi LP solver
 #'
