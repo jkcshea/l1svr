@@ -90,7 +90,7 @@ max(abs(cplexDual - lpDual))
 ## Heteroskedastic inference
 res3 <- l1svr(formula = y ~ 1 +  x1 + x2, data = simdata,
               epsilon = tmpEpsilon, lambda = tmpLambda, inference = TRUE,
-              heteroskedastic = TRUE, h = 2, kappa = 1.75)
+              h = 2, kappa = 1.75)
 summary(res3)
 
 
@@ -117,7 +117,7 @@ source('svr-functions.R')
 res4 <- l1svr(formula = y ~ 0 +  x1 + x2, data = simdata,
               epsilon = tmpEpsilon, lambda = tmpLambda,
               inference = TRUE,
-              confidence = FALSE)
+              confidence.level = 0.95)
 
 source('svr-functions.R')
 summary(res4)

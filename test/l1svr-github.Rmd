@@ -10,7 +10,7 @@ output:
     toc: true
     keep_md: true
 vignette: >
-  %\VignetteIndexEntry{ivmte}
+  %\VignetteIndexEntry{l1svr}
   %\VignetteEncoding{UTF-8}
   %\VignetteEngine{knitr::rmarkdown}
 ---
@@ -31,10 +31,10 @@ We refer the reader to @bai2021inference for technical details on how the estima
 
 ## Installation and Requirements
 
-**l1svr** can be installed from CRAN via
-```{r eval = FALSE}
-install.packages("l1svr")
-```
+<!-- **l1svr** can be installed from CRAN via -->
+<!-- ```{r eval = FALSE} -->
+<!-- install.packages("l1svr") -->
+<!-- ``` -->
 
 If you have the **devtools** package, you can install the latest version of the module directly from our GitHub repository via
 ```{r eval = FALSE}
