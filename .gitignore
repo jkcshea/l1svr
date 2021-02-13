@@ -1,3 +1,10 @@
+# Package files
+.Rproj.user
+.Rhistory
+.RData
+*.*~
+vignettes/l1svr_cache/
+
 # Temporary files
 *.R~
 

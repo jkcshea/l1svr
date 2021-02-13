@@ -1,0 +1,36 @@
+Package: l1svr
+Type: Package
+Title: Inference for Support Vector Regression Under l1 Regularization
+Version: 1.0.0
+Authors@R: c(person("Yuehao",
+		    "Bai",
+		    email = "yuehaob@umich.edu",
+		    role = c("aut")),
+             person("Hung",
+		    "Ho",
+		    email = "hqdh@wharton.upenn.edu",
+		    role = c("aut")),
+             person("Guillaume",
+		    "Pouliot",
+		    email = "guillaumepouliot@uchicago.edu",
+		    role = c("aut")),
+	     person("Joshua",
+                    "Shea",
+		    email = "jkcshea@uchicago.edu",
+		    role = c("aut", "cre")))
+Maintainer: Joshua Shea <jkcshea@uchicago.edu>
+Description: This package allows users to estimate support vector regressions with l1-norm regularization (l1-SVR). The package employs large sample distribution theory for l1-SVR to estimate p-values and error bars for the SVR regression coefficients.
+License: GPL-2 | GPL-3
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 3.6.0)
+Suggests:
+    gurobi (>= 8.1-0),
+    slam (>= 0.1-42),
+    cplexAPI (>= 1.3.3),
+    lpSolveAPI (>= 5.5.2.0-17),
+    Matrix,
+    knitr,
+    rmarkdown
+RoxygenNote: 6.1.1
+VignetteBuilder: knitr
