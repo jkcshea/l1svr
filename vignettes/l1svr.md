@@ -90,7 +90,14 @@ model are estimated by minimizing a loss function that linearly
 penalizes the errors exceeding a threshold `epsilon`, as depicted in the
 figure below.
 
-<img src="images/svr-loss.png" width="50%" style="display: block; margin: auto;" />
+<!-- # ```{r, echo = FALSE, out.width = '50%', fig.show = 'hold', fig.align = 'center'} -->
+
+<!-- # knitr::include_graphics("images/svr-loss.png") -->
+
+<!-- # ``` -->
+
+![SVR
+Loss](https://github.com/jkcshea/l1svr/tree/main/vignettes/images/svr-loss.png)
 
 The l1-norm regularization includes an additional penalty proportional
 to the l1-norm of the coefficient estimates. The extent of the
