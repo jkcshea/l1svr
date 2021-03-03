@@ -62,13 +62,6 @@ The user can choose from three options.
 We _strongly_ recommend using Gurobi or CPLEX, since these are actively developed, much more stable, and typically an order of magnitude faster than **lpSolveAPI**.
 A very clear installation guide for Gurobi can be found [here](https://cran.r-project.org/package=prioritizr/vignettes/gurobi_installation.html)
 
-The package includes the data set `simdata`, which we will use to demonstrate the features of the package.
-
-```{r, show-data}
-library(l1svr)
-knitr::kable(head(simdata))
-```
-
 ### Basic estimation and inference
 
 In support vector regressions, the parameters of a linear regression model are estimated by minimizing a loss function that linearly penalizes the errors exceeding a threshold `epsilon`, as depicted in the figure below.
@@ -101,6 +94,13 @@ In support vector regressions, the parameters of a linear regression model are e
 
 The l1-norm regularization includes an additional penalty proportional to the l1-norm of the coefficient estimates.
 The extent of the regularization is controlled by the tuning parameter `lambda`, which scales the l1-penalty on the coefficient estimates.
+
+The package includes the data set `simdata`, which we will use to demonstrate the features of the package.
+
+```{r, show-data}
+library(l1svr)
+knitr::kable(head(simdata))
+```
 
 To estimate a linear regression model using the **l1svr** package, the user must pass a data set, a regression equation, a bandwidth `epsilon`, and a tuning parameter `lambda` to the function `l1svr`.
 The user may also choose which solver to use by setting the `solver` argument to `'gurobi'`, `'cplexapi'`, or `'lpsolveapi'`. 

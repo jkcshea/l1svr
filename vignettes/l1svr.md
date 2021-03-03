@@ -64,6 +64,20 @@ than **lpSolveAPI**. A very clear installation guide for Gurobi can be
 found
 [here](https://cran.r-project.org/package=prioritizr/vignettes/gurobi_installation.html)
 
+### Basic estimation and inference
+
+In support vector regressions, the parameters of a linear regression
+model are estimated by minimizing a loss function that linearly
+penalizes the errors exceeding a threshold `epsilon`, as depicted in the
+figure below.
+
+<img src="vignettes/l1svr_files/figure-gfm/loss-1.png" style="display: block; margin: auto;" />
+
+The l1-norm regularization includes an additional penalty proportional
+to the l1-norm of the coefficient estimates. The extent of the
+regularization is controlled by the tuning parameter `lambda`, which
+scales the l1-penalty on the coefficient estimates.
+
 The package includes the data set `simdata`, which we will use to
 demonstrate the features of the package.
 
@@ -80,20 +94,6 @@ knitr::kable(head(simdata))
 |  12.293254 | 2.4941418 |   3.6132991 |
 | \-3.457342 | 1.2373849 | \-0.0378572 |
 |   2.740720 | 2.1897245 | \-1.8182690 |
-
-### Basic estimation and inference
-
-In support vector regressions, the parameters of a linear regression
-model are estimated by minimizing a loss function that linearly
-penalizes the errors exceeding a threshold `epsilon`, as depicted in the
-figure below.
-
-<img src="vignettes/l1svr_files/figure-gfm/loss-1.png" style="display: block; margin: auto;" />
-
-The l1-norm regularization includes an additional penalty proportional
-to the l1-norm of the coefficient estimates. The extent of the
-regularization is controlled by the tuning parameter `lambda`, which
-scales the l1-penalty on the coefficient estimates.
 
 To estimate a linear regression model using the **l1svr** package, the
 user must pass a data set, a regression equation, a bandwidth `epsilon`,
