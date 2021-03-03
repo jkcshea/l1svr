@@ -19,7 +19,8 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  cache = TRUE
+  cache = TRUE,
+  fig.path = "vignettes/images/"
 )
 ```
 
@@ -36,7 +37,8 @@ We refer the reader to @bai2021inference for technical details on how the estima
 <!-- install.packages("l1svr") -->
 <!-- ``` -->
 
-If you have the **devtools** package, you can install the latest version of the module directly from our GitHub repository via
+The latest version of the module may be installed from our GitHub repository using the **devtools** package.
+
 ```{r eval = FALSE}
 devtools::install_github("jkcshea/l1svr")
 ```
@@ -54,8 +56,7 @@ The user can choose from three options.
 3. The **lpSolveAPI** package, which is free and open-source, and available from CRAN.
    Note that **lpSolveAPI** is a wrapper for [lp_solve](http://lpsolve.sourceforge.net/5.5/), which is no longer actively developed.
 
-We have provided the option to use **lpSolveAPI** because it appears to be the only interface for solving linear programs that can be installed solely through `install.packages`.
-However, we _strongly_ recommend using Gurobi or CPLEX, since these are actively developed, much more stable, and typically an order of magnitude faster than **lpSolveAPI**.
+We _strongly_ recommend using Gurobi or CPLEX, since these are actively developed, much more stable, and typically an order of magnitude faster than **lpSolveAPI**.
 A very clear installation guide for Gurobi can be found [here](https://cran.r-project.org/package=prioritizr/vignettes/gurobi_installation.html)
 
 The package includes the data set `simdata`, which we will use to demonstrate the features of the package.
@@ -70,10 +71,31 @@ knitr::kable(head(simdata))
 
 In support vector regressions, the parameters of a linear regression model are estimated by minimizing a loss function that linearly penalizes the errors exceeding a threshold `epsilon`, as depicted in the figure below.
 
-<!-- # ```{r, echo = FALSE, out.width = '50%', fig.show = 'hold', fig.align = 'center'} -->
-<!-- # knitr::include_graphics("images/svr-loss.png") -->
-<!-- # ``` -->
-![SVR Loss](https://github.com/jkcshea/l1svr/tree/main/vignettes/images/svr-loss.png)
+```{r, loss-function, echo = FALSE, fig.show = 'hold', fig.align = 'center', fig.width = 7,fig.height = 3}
+  library(ggplot2)
+  lossFunc <- function(x, epsilon) {
+      return(max(c(abs(x) - epsilon, 0)))
+  }
+  lossFunc <- Vectorize(lossFunc, 'x')
+  epsilon <- 0.5
+  xseq <- seq(-2, 2, 0.5)
+  yseq <- lossFunc(xseq, epsilon)
+  ggplot() +
+      geom_line(mapping = aes(x = xseq,
+                              y = yseq)) +
+      scale_x_continuous(breaks = c(seq(min(xseq), max(xseq), 1),
+                                    -epsilon, epsilon),
+                         labels = c(seq(min(xseq), max(xseq), 1),
+                                    expression(-epsilon), expression(epsilon)),
+                         limits = c(min(xseq), max(xseq))) +
+      scale_y_continuous(limits = c(0, max(yseq)),
+                         breaks = seq(0, max(yseq), 0.5)) +
+      labs(x = 'Error',
+           y = 'Loss') +
+      theme(panel.background = element_blank(),
+            axis.line = element_line(),
+            axis.text = element_text(size = 14))
+```
 
 The l1-norm regularization includes an additional penalty proportional to the l1-norm of the coefficient estimates.
 The extent of the regularization is controlled by the tuning parameter `lambda`, which scales the l1-penalty on the coefficient estimates.

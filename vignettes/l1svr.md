@@ -32,8 +32,8 @@ estimation and inference are carried out.
 
 <!-- ``` -->
 
-If you have the **devtools** package, you can install the latest version
-of the module directly from our GitHub repository via
+The latest version of the module may be installed from our GitHub
+repository using the **devtools** package.
 
 ``` r
 devtools::install_github("jkcshea/l1svr")
@@ -58,12 +58,10 @@ from three options.
     [lp\_solve](http://lpsolve.sourceforge.net/5.5/), which is no longer
     actively developed.
 
-We have provided the option to use **lpSolveAPI** because it appears to
-be the only interface for solving linear programs that can be installed
-solely through `install.packages`. However, we *strongly* recommend
-using Gurobi or CPLEX, since these are actively developed, much more
-stable, and typically an order of magnitude faster than **lpSolveAPI**.
-A very clear installation guide for Gurobi can be found
+We *strongly* recommend using Gurobi or CPLEX, since these are actively
+developed, much more stable, and typically an order of magnitude faster
+than **lpSolveAPI**. A very clear installation guide for Gurobi can be
+found
 [here](https://cran.r-project.org/package=prioritizr/vignettes/gurobi_installation.html)
 
 The package includes the data set `simdata`, which we will use to
@@ -90,14 +88,7 @@ model are estimated by minimizing a loss function that linearly
 penalizes the errors exceeding a threshold `epsilon`, as depicted in the
 figure below.
 
-<!-- # ```{r, echo = FALSE, out.width = '50%', fig.show = 'hold', fig.align = 'center'} -->
-
-<!-- # knitr::include_graphics("images/svr-loss.png") -->
-
-<!-- # ``` -->
-
-![SVR
-Loss](https://github.com/jkcshea/l1svr/tree/main/vignettes/images/svr-loss.png)
+<img src="vignettes/images/loss-function-1.png" style="display: block; margin: auto;" />
 
 The l1-norm regularization includes an additional penalty proportional
 to the l1-norm of the coefficient estimates. The extent of the
