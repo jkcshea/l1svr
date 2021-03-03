@@ -20,12 +20,11 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   cache = TRUE,
-  fig.path = "vignettes/images/"
+  fig.path = "images/"
 )
 require(pander)
 require(ggplot2)
 require(l1svr)
-require(gridExtra)
 ```
 
 ## Introduction
@@ -74,7 +73,7 @@ knitr::kable(head(simdata))
 
 In support vector regressions, the parameters of a linear regression model are estimated by minimizing a loss function that linearly penalizes the errors exceeding a threshold `epsilon`, as depicted in the figure below.
 
-```{r, loss, echo = FALSE, fig.show = 'hold', fig.align = 'center', fig.width = 7,fig.height = 3}
+```{r, loss, echo = FALSE, fig.align = 'center', fig.width = 7,fig.height = 3}
   library(ggplot2)
   lossFunc <- function(x, epsilon) {
       return(max(c(abs(x) - epsilon, 0)))
@@ -83,7 +82,7 @@ In support vector regressions, the parameters of a linear regression model are e
   epsilon <- 0.5
   xseq <- seq(-2, 2, 0.5)
   yseq <- lossFunc(xseq, epsilon)
-  lossFig <- ggplot() +
+  ggplot() +
       geom_line(mapping = aes(x = xseq,
                               y = yseq)) +
       scale_x_continuous(breaks = c(seq(min(xseq), max(xseq), 1),
@@ -98,7 +97,6 @@ In support vector regressions, the parameters of a linear regression model are e
       theme(panel.background = element_blank(),
             axis.line = element_line(),
             axis.text = element_text(size = 14))
-  grid.arrange(lossFig)
 ```
 
 The l1-norm regularization includes an additional penalty proportional to the l1-norm of the coefficient estimates.
