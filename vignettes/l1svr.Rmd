@@ -22,6 +22,9 @@ knitr::opts_chunk$set(
   cache = TRUE,
   fig.path = "vignettes/images/"
 )
+require(pander)
+require(ggplot2)
+require(l1svr)
 ```
 
 ## Introduction
