@@ -88,7 +88,7 @@ model are estimated by minimizing a loss function that linearly
 penalizes the errors exceeding a threshold `epsilon`, as depicted in the
 figure below.
 
-![](vignettes/l1svr_files/figure-gfm/loss-1.png)<!-- -->
+<img src="vignettes/l1svr_files/figure-gfm/loss-1.png" style="display: block; margin: auto;" />
 
 The l1-norm regularization includes an additional penalty proportional
 to the l1-norm of the coefficient estimates. The extent of the
